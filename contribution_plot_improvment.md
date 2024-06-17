@@ -1,12 +1,8 @@
-Certainly! Below is the revised full article explaining the enhancements in Shapash's feature/contribution plots, focusing on jittering points on violin plots, smart selection for diverse class representation, and volume representation via curves and bars.
-
----
-
-### Enhancing Shapash Feature/Contribution Plots: Jittering, Smart Selection, and Volume Representation
+# Enhancing Shapash Feature/Contribution Plots: Jittering, Smart Selection, and Volume Representation
 
 Shapash is an innovative library for machine learning interpretability, offering various tools to help understand model predictions. Three notable enhancements in Shapash's feature/contribution plots include jittering points on violin plots, smart selection for diverse class representation, and volume representation via curves and bars. These features significantly improve the clarity and interpretability of the plots, making it easier for users to draw insights from the data.
 
-#### 1. Jittering Points on Violin Plot
+## 1. Jittering Points on Violin Plot
 
 Violin plots in Shapash provide a detailed distribution of feature contributions, but overlapping points can obscure individual values. Jittering, or adding random noise to the points, disperses them slightly along the x-axis. This prevents overlap and makes each point distinctly visible.
 
@@ -38,7 +34,7 @@ fig.add_scatter(
 - **Better Interpretation:** Users can accurately see the distribution and density of data points without overlap.
 - **Improved Aesthetics:** The plot looks less cluttered and more visually appealing.
 
-#### 2. Smart Selection for Diverse Class Representation
+## 2. Smart Selection for Diverse Class Representation
 
 Shapash employs a smart sampling strategy to ensure a diverse representation of classes in the dataset. This approach involves clustering the data and sampling points from each cluster. By doing so, it avoids over-representation of any particular class and ensures that the selected points represent the overall distribution of the data.
 
@@ -79,7 +75,7 @@ def _subset_sampling(
 - **Avoids Bias:** Prevents the plot from being dominated by majority classes, highlighting contributions from minority classes.
 - **Efficient Sampling:** Even with large datasets, this method effectively samples a manageable number of points without losing representativeness.
 
-#### 3. Volume Representation via Curves and Bars
+## 3. Volume Representation via Curves and Bars
 
 Shapash represents the volume of data points using curves for continuous variables and bars for discrete variables. This dual approach provides an accurate visual summary of how features are distributed across their range and how they contribute to the model's predictions.
 
@@ -127,6 +123,6 @@ fig.add_trace(density_plot)
 - **Data Density Insights:** Users can quickly grasp where data points are concentrated and how they contribute to predictions.
 - **Improved Readability:** The use of curves and bars simplifies the visual interpretation, making it easy to identify key patterns and anomalies.
 
-### Conclusion
+## Conclusion
 
 The enhancements in Shapash's feature/contribution plots—jittering points, smart selection for diverse class representation, and volume representation via curves and bars—significantly boost the interpretability and usability of the visualizations. These features allow users to gain deeper insights into their models' behavior, leading to more informed decision-making and better understanding of machine learning models. By making these visualizations clearer and more representative, Shapash continues to be a valuable tool for data scientists and analysts.
