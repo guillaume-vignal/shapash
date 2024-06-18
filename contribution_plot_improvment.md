@@ -1,6 +1,6 @@
-# Enhancing Shapash Feature/Contribution Plots: Jittering, Smart Selection, and Volume Representation
+# Enhancing Shapash Contribution Plots with Jittering, Smart Selection, and Volume Representation
 
-Shapash is a cutting-edge library for **machine learning interpretability**, offering diverse tools to facilitate understanding of model predictions. Three significant improvements in Shapash's **feature/contribution plots** include **jittering points** on violin plots, **smart selection** for diverse class representation, and **volume representation** via curves and bars. These enhancements greatly enhance the **clarity** and **interpretability** of the plots, enabling users to derive deeper **insights** from their data.
+Shapash is a cutting-edge library for **machine learning interpretability**, offering diverse tools to facilitate understanding of model predictions. Three significant improvements in Shapash's **contribution plots** include **jittering points** on violin plots, **smart selection** for diverse class representation, and **volume representation** via curves and bars. These enhancements greatly enhance the **clarity** and **interpretability** of the plots, enabling users to derive deeper **insights** from their data.
 
 ## 1. Jittering Points on Violin Plot
 
@@ -187,4 +187,4 @@ This approach visually represents feature distributions comprehensively, aiding 
 
 ## Conclusion
 
-Enhancements in Shapash's feature/contribution plots—jittering points, smart selection for diverse class representation, and volume representation via curves and bars—significantly improve the interpretability and usability of visualizations. These advancements empower users to gain deeper insights into model behaviors, facilitating informed decision-making in machine learning applications. By enhancing visualization clarity and representativeness, Shapash continues to be an invaluable tool for data scientists and analysts.
+Enhancements in Shapash's contribution plots—jittering points, smart selection for diverse class representation, and volume representation via curves and bars—significantly improve the interpretability and usability of visualizations. These advancements empower users to gain deeper insights into model behaviors, facilitating informed decision-making in machine learning applications. By enhancing visualization clarity and representativeness, Shapash continues to be an invaluable tool for data scientists and analysts.
