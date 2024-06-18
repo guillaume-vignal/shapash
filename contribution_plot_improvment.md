@@ -179,7 +179,7 @@ This approach visually represents feature distributions comprehensively, aiding 
   <img src="img_medium/smart_subset2.png" alt="Violin Plot With Smart Selection" style="width: 45%;"/>
 </div>
 
-## Value Derived from Volume Representation
+### Value Derived from Volume Representation
 
 - **Clear Data Distribution**: Provides intuitive insights into feature distributions.
 - **Impact Analysis**: Visualizes how features contribute to model predictions.
