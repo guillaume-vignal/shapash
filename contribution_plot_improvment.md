@@ -100,7 +100,7 @@ def _intelligent_sampling(self, data, max_points, col_value_count, random_seed):
 The `_intelligent_sampling` function selects a subset of data based on the distribution of values in a specified column. Here’s how it operates:
 
 1. **Data Type Handling**:
-   - It checks if the column (`col`) contains numerical (`float` or `int`) or categorical (`object` or `category`) data.
+   - It checks if the data contains numerical (`float` or `int`) or categorical (`object` or `category`) data.
 
 2. **Condition Check**:
    - If the number of unique values (`col_value_count`) is less than 5% of the total rows in the dataset (`len(data) / 20`) or if the column contains string data, it uses the original column values without clustering (`is_col_str`).
