@@ -71,9 +71,9 @@ def _intelligent_sampling(self, data, max_points, col_value_count, random_seed):
     Performs intelligent sampling based on the distribution of values in the specified column.
     """
     rng = np.random.default_rng(seed=random_seed)
-    is_col_str = True
 
     # Check if data is numerical data
+    is_col_str = True
     if data.dtype.kind in "fc":
         is_col_str = False
 
