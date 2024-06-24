@@ -145,7 +145,7 @@ if feature_values.iloc[:, 0].dtype.kind in "biufc":
 
     # Using Kernel Density Estimation for continuous variables
     kde = KernelDensity(
-        bandwidth=(feature_values_array.max() - feature_values_array.min()) / 100,
+        bandwidth=(max(feature_values_array) - min(feature_values_array)) / 100,
         kernel="epanechnikov",
     ).fit(feature_values_array[:, None])
     xs = np.linspace(min(feature_values_array), max(feature_values_array), 1000)
