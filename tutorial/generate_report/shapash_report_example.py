@@ -20,7 +20,11 @@ from shapash.utils.dtypes import text_like_columns
 if __name__ == "__main__":
     house_df, house_dict = data_loading("house_prices")
     y_df = house_df["SalePrice"]
-    X_df = house_df[house_df.columns.difference(["SalePrice"])]
+    X_df = house_df[house_df.columns.difference(["SalePrice"])].copy()
+
+    for col in X_df.columns:
+        if not pd.api.types.is_numeric_dtype(X_df[col]):
+            X_df[col] = X_df[col].astype(object)
 
     categorical_features = text_like_columns(X_df, strict_object=False)
 
@@ -63,3 +67,5 @@ if __name__ == "__main__":
             },
         ],
     )
+
+    xpl.generate_report_with_panel(output_file=os.path.join(cur_dir, "output", "report_with_panel.html"), title_story="House prices report with panel", title_description="This document is a data science report of the kaggle house prices tutorial project. It was generated using the Shapash library and Panel.")
