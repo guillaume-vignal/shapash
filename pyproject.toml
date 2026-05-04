@@ -51,13 +51,7 @@ dependencies = [
 
 [project.optional-dependencies] # Optional
 report = [
-    "Jinja2>=3.1.0",
-    "jupyter-client>=8.3.0",
-    "nbconvert>=7.2.0",
-    "notebook>=7.0.0",
-    "papermill>=2.5.0",
-    "phik>=0.12.4",
-    "pyarrow>=17.0.0",
+    "panel>=1.8.10",
 ]
 xgboost = ["xgboost>=2.1.0"]
 catboost = ["catboost>=1.2.8"]
