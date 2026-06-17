@@ -52,6 +52,8 @@ dependencies = [
 [project.optional-dependencies] # Optional
 report = [
     "panel>=1.8.10",
+    "phik>=0.12.4",
+
 ]
 xgboost = ["xgboost>=2.1.0"]
 catboost = ["catboost>=1.2.8"]
