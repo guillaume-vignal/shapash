@@ -18,7 +18,7 @@ def _enable_panel_plotly() -> None:
 @lru_cache(maxsize=1)
 def report_js_text() -> str:
     """Load report JavaScript once for Panel report export."""
-    js_path = Path(__file__).resolve().parent / "report_script.js"
+    js_path = Path(__file__).resolve().parent / "assets" / "report_script.js"
     return js_path.read_text(encoding="utf-8")
 
 
@@ -56,7 +56,7 @@ def apply_report_css(
 ) -> None:
     """Register smart-report CSS in Panel global configuration."""
     _enable_panel_plotly()
-    css_paths = [Path(__file__).resolve().parent / "report_styles.css"]
+    css_paths = [Path(__file__).resolve().parent / "assets" / "report_styles.css"]
     css_paths.extend(_resolve_custom_css_paths(custom_css=custom_css, base_dir=base_dir))
 
     for css_path in css_paths:

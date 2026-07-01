@@ -12,14 +12,14 @@ from shapash.report.panel_support import apply_report_css
 class TestSmartReportPanel(unittest.TestCase):
 
     def test_report_css_text_loads_stylesheet_content(self):
-        css_path = Path(__file__).resolve().parents[3] / "shapash" / "report" / "report_styles.css"
+        css_path = Path(__file__).resolve().parents[3] / "shapash" / "report" / "assets" / "report_styles.css"
         css = css_path.read_text(encoding="utf-8")
 
         self.assertIn(".kv-table", css)
         self.assertIn("@media (max-width: 1200px)", css)
 
     def test_apply_report_css_registers_styles_once(self):
-        css_path = Path(__file__).resolve().parents[3] / "shapash" / "report" / "report_styles.css"
+        css_path = Path(__file__).resolve().parents[3] / "shapash" / "report" / "assets"  / "report_styles.css"
         css = css_path.read_text(encoding="utf-8")
 
         apply_report_css()

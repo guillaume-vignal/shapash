@@ -1773,7 +1773,7 @@ class SmartExplainer:
         config_file = (
             Path(yaml_path)
             if yaml_path is not None
-            else Path(__file__).resolve().parent.parent / "report" / "default_report.yml"
+            else Path(__file__).resolve().parent.parent / "report" / "assets" / "default_report.yml"
         )
 
         generate_smart_report(
