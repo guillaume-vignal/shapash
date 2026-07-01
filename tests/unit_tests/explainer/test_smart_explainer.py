@@ -25,6 +25,7 @@ from shapash.backend import ShapBackend
 from shapash.explainer.multi_decorator import MultiDecorator
 from shapash.explainer.smart_state import SmartState
 from shapash.utils.check import check_model
+from shapash.report.blocks import ReportBlockMixin
 
 
 def init_sme_to_pickle_test():
@@ -1110,7 +1111,7 @@ class TestSmartExplainer(unittest.TestCase):
         xpl.run_app()
         assert xpl.y_target is not None
 
-    @patch("shapash.report.core.generate_report")
+    @patch("shapash.explainer.smart_explainer.generate_smart_report")
     def test_generate_report(self, mock_generate_report):
         """
         Test generate report method
@@ -1132,7 +1133,7 @@ class TestSmartExplainer(unittest.TestCase):
             output_file="test",
         )
 
-    @patch("shapash.report.core.generate_report")
+    @patch("shapash.explainer.smart_explainer.generate_smart_report")
     def test_generate_report_with_user_block_instance(self, mock_generate_report):
         """Custom block runtime provided by user must be passed through unchanged."""
         df = pd.DataFrame(range(0, 21), columns=["id"])
@@ -1144,8 +1145,9 @@ class TestSmartExplainer(unittest.TestCase):
         xpl = SmartExplainer(clf)
         xpl.compile(x=df[["x1", "x2"]])
 
-        class _UserRuntime:
+        class _UserRuntime(ReportBlockMixin):
             def __init__(self):
+                super().__init__()
                 self.user_initialized = True
 
             def render_block(self, block_cfg):
