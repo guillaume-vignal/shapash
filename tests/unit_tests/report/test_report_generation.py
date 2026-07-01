@@ -6,18 +6,10 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from shapash.report.blocks import ReportBlockMixin, block
-from shapash.report.panel_support import apply_report_css, make_plotly_pane
+from shapash.report.panel_support import apply_report_css
 
 
 class TestSmartReportPanel(unittest.TestCase):
-    def test_make_plotly_pane_returns_panel_plotly(self):
-        fig = go.Figure(go.Scatter(x=[1, 2], y=[3, 4]))
-
-        pane = make_plotly_pane(fig)
-
-        self.assertIsInstance(pane, pn.pane.Plotly)
-        self.assertEqual(pane.object, fig)
-        self.assertEqual(pane.sizing_mode, "stretch_width")
 
     def test_report_css_text_loads_stylesheet_content(self):
         css_path = Path(__file__).resolve().parents[3] / "shapash" / "report" / "report_styles.css"
