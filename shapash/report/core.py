@@ -16,9 +16,9 @@ from shapash.report.validation import load_report_config
 logger = logging.getLogger(__name__)
 
 
-def generate_report(runtime, config_file: str, output_file: str) -> None:
+def generate_report(runtime, config_file: Path, output_file: str) -> None:
     """Render a Panel report to an HTML file driven by a YAML config."""
-    cfg_path = Path(config_file).resolve()
+    cfg_path = config_file.resolve()
     cfg = load_report_config(cfg_path)
     print(f"Loading config → {cfg_path}")
 
@@ -134,7 +134,7 @@ def build_navigation_bar(blocks: list[dict]) -> pn.pane.HTML:
 
     logo_path = Path(__file__).resolve().parent.parent / "style" / "shapash-fond-clair.png"
     logo_data = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-    logo_html = '<div class="nav-logo">' f'<img src="data:image/png;base64,{logo_data}" alt="Shapash logo" />' "</div>"
+    logo_html = f'<div class="nav-logo"><img src="data:image/png;base64,{logo_data}" alt="Shapash logo" /></div>'
 
     nav_scale = max(0.62, min(1.0, 24 / max(1, item_count)))
     nav_html = "".join(

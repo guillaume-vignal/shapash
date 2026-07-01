@@ -38,6 +38,13 @@ from shapash.utils.transform import apply_postprocessing, handle_categorical_mis
 from shapash.utils.utils import get_host_name
 from shapash.webapp.smart_app import SmartApp
 
+try:
+    from shapash.report.blocks import ReportBlockMixin
+    from shapash.report.core import generate_report as generate_smart_report
+except ImportError:
+    # [report] optional dependencies may not be installed
+    ...
+
 from .smart_plotter import SmartPlotter
 
 logging.basicConfig(level=logging.INFO)
@@ -1660,12 +1667,11 @@ class SmartExplainer:
         x_train: pd.DataFrame | None = None,
         y_train: pd.Series | pd.DataFrame | list | None = None,
         y_test: pd.Series | pd.DataFrame | list | None = None,
-        working_dir: str | Path | None = None,
         yaml_path: str | Path | None = None,
         max_points: int = 200,
         display_interaction_plot: bool = False,
         nb_top_interactions: int = 5,
-        block_instance: object | None = None,
+        block_instance: ReportBlockMixin | None = None,
     ) -> None:
         """
         Generate an interactive HTML report summarizing the model and its explainability.
@@ -1688,9 +1694,6 @@ class SmartExplainer:
             Target values corresponding to `x_train`.
         y_test : pandas.Series or pandas.DataFrame, optional
             Target values for the test dataset.
-        working_dir : str, optional
-            Directory used to temporarily store generated files (e.g., report config).
-            If `None`, a temporary directory is automatically created and deleted after report generation.
         yaml_path : str, optional
             Path to a custom YAML configuration file used to generate the report.
             If `None`, a default YAML configuration is generated.
@@ -1735,50 +1738,49 @@ class SmartExplainer:
         ...     nb_top_interactions=5,
         ... )
         """
-        from shapash.report.blocks import ReportBlockMixin
-        from shapash.report.core import generate_report as generate_smart_report
 
-        if x_train is not None:
-            x_train = handle_categorical_missing(x_train)
-
-        rm_working_dir = False
-        if not working_dir:
-            working_dir = tempfile.mkdtemp()
-            rm_working_dir = True
-
+        # input checks
         if not hasattr(self, "model"):
             raise AssertionError(
                 "Explainer object was not compiled. Please compile the explainer "
                 "object using .compile(...) method before generating the report."
             )
 
-        try:
-            if block_instance is None:
-                report_runtime = ReportBlockMixin(
-                    explainer=self,
-                    x_train=x_train,
-                    y_train=y_train,
-                    y_test=y_test,
-                    max_points=max_points,
-                )
-            else:
-                report_runtime = block_instance
+        if block_instance is not None:
+            if (x_train is not None) and (block_instance.x_train_init is not x_train):
+                logging.warning("block_instance's x_train is different from provided x_train. Latter is ignored.")
+            if (y_train is not None) and (block_instance.y_train is not y_train):
+                logging.warning("block_instance's y_train is different from provided y_train. Latter is ignored.")
+            if (y_test is not None) and (block_instance.y_test is not y_test):
+                logging.warning("block_instance's y_test is different from provided y_test. Latter is ignored.")
+            if max_points != block_instance.max_points:
+                logging.warning("block_instance's max_points is different from provided max_points. Latter is ignored.")
 
-            if yaml_path is not None:
-                config_file = Path(yaml_path)
-            else:
-                yaml_path = Path(__file__).resolve().parent.parent / "report" / "default_report.yml"
-                config_file = yaml_path
+            report_runtime = block_instance
 
-            generate_smart_report(runtime=report_runtime, config_file=str(config_file), output_file=output_file)
+        else:
+            if x_train is not None:
+                x_train = handle_categorical_missing(x_train)
 
-            if rm_working_dir:
-                shutil.rmtree(working_dir)
+            report_runtime = ReportBlockMixin(
+                explainer=self,
+                x_train=x_train,
+                y_train=y_train,
+                y_test=y_test,
+                max_points=max_points,
+            )
 
-        except Exception as e:
-            if rm_working_dir:
-                shutil.rmtree(working_dir)
-            raise e
+        config_file = (
+            Path(yaml_path)
+            if yaml_path is not None
+            else Path(__file__).resolve().parent.parent / "report" / "default_report.yml"
+        )
+
+        generate_smart_report(
+            runtime=report_runtime,
+            config_file=config_file,
+            output_file=output_file,
+        )
 
     def _local_pred(self, index, label=None):
         """

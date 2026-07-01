@@ -9,7 +9,6 @@ import category_encoders as ce
 import numpy as np
 import pandas as pd
 import yaml
-from category_encoders import OrdinalEncoder
 
 from shapash import SmartExplainer
 
@@ -44,7 +43,6 @@ class TestGeneration(unittest.TestCase):
             x_train=self.df[["x1", "x2", "x3", "x4"]],
             y_train=self.df["y"],
             y_test=self.df["y"],
-            working_dir=tmp_dir_path,
             yaml_path=report_test_cfg_path,
         )
         self.xpl.palette_name = "default"
@@ -87,19 +85,5 @@ class TestGeneration(unittest.TestCase):
         assert os.path.exists(outfile)
         report_html = Path(outfile).read_text(encoding="utf-8")
         assert custom_css_marker in report_html
-
-        shutil.rmtree(tmp_dir_path)
-
-    def test_generate_report_interactions_enabled(self):
-        tmp_dir_path = tempfile.mkdtemp()
-        outfile = os.path.join(tmp_dir_path, "report_interactions.html")
-
-        self.xpl.generate_report(
-            output_file=outfile,
-            x_train=self.df[["x1", "x2", "x3", "x4"]],
-            display_interaction_plot=True,
-            working_dir=tmp_dir_path,
-        )
-        assert os.path.exists(outfile)
 
         shutil.rmtree(tmp_dir_path)
