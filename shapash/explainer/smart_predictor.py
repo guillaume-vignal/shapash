@@ -6,7 +6,8 @@ import copy
 import functools
 import logging
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import pandas as pd
 
