@@ -17,8 +17,9 @@ import yaml
 from shapash.plots.plot_evaluation_metrics import plot_confusion_matrix
 from shapash.plots.plot_univariate import plot_distribution
 from shapash.report.common import compute_col_types, series_dtype
+from shapash.report.core import _wrap_section_anchor
 from shapash.report.data_analysis import perform_global_dataframe_analysis, perform_univariate_dataframe_analysis
-from shapash.report.panel_support import _enable_panel_plotly
+from shapash.report.panel_support import _add_css_classes, _auto_style_viewable, _coerce_viewable
 from shapash.report.validation import render_block_error, stats_to_table
 from shapash.utils.transform import apply_postprocessing, handle_categorical_missing, inverse_transform
 from shapash.utils.utils import compute_sorted_variables_interactions_list_indices
@@ -35,98 +36,18 @@ PALETTE = {
 TARGET_DISTRIBUTION_COLORS = {"pred": "#2255aa", "true": "#f4c000"}
 
 
-def _dedupe_css_classes(*class_groups: Any) -> list[str]:
-    classes: list[str] = []
-    for group in class_groups:
-        if not group:
-            continue
-        if isinstance(group, str):
-            items = [group]
-        else:
-            items = list(group)
-        for item in items:
-            if item and item not in classes:
-                classes.append(item)
-    return classes
-
-
-def _add_css_classes(viewable: pn.viewable.Viewable, *classes: str) -> pn.viewable.Viewable:
-    current = getattr(viewable, "css_classes", None)
-    merged = _dedupe_css_classes(current, classes)
-    if merged:
-        viewable.css_classes = merged
-    return viewable
-
-
-def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
-    if isinstance(viewable, pn.pane.Markdown):
-        return _add_css_classes(viewable, "content-block")
-
-    if isinstance(viewable, pn.pane.DataFrame):
-        classes = ["kv-table"]
-        if getattr(viewable, "width_policy", None) == "min":
-            classes.append("fit-content-table")
-        return _add_css_classes(viewable, *classes)
-
-    if isinstance(viewable, pn.pane.Plotly):
-        return viewable
-
-    if isinstance(viewable, pn.widgets.Select):
-        return viewable
-
-    param_function_type = getattr(pn.param, "ParamFunction", None)
-    if param_function_type is not None and isinstance(viewable, param_function_type):
-        return viewable
-
-    param_method_type = getattr(pn.param, "ParamMethod", None)
-    if param_method_type is not None and isinstance(viewable, param_method_type):
-        return viewable
-
-    if isinstance(viewable, pn.Row):
-        if method_name == "block_badge_row":
-            for child in getattr(viewable, "objects", []):
-                if isinstance(child, pn.pane.Markdown):
-                    _add_css_classes(child, "badge-pill")
-        return viewable
-
-    if isinstance(viewable, pn.Column):
-        if method_name == "block_project_information":
-            _add_css_classes(viewable, "project-info-grid")
-            for child in getattr(viewable, "objects", []):
-                if isinstance(child, pn.Column):
-                    _add_css_classes(child, "project-info-card")
-                    for grandchild in getattr(child, "objects", []):
-                        _auto_style_viewable(grandchild, method_name=method_name)
-                else:
-                    _auto_style_viewable(child, method_name=method_name)
-            return viewable
-
-        for child in getattr(viewable, "objects", []):
-            _auto_style_viewable(child, method_name=method_name)
-        return viewable
-
-    method_info = f" in '{method_name}'" if method_name else ""
-    allowed_types = "Markdown, DataFrame, Plotly, Select, ParamFunction, ParamMethod, Row, Column"
-    raise TypeError(
-        f"Unsupported Panel object type returned{method_info}: {type(viewable).__name__}. "
-        f"Allowed Panel return types: {allowed_types}."
-    )
-
-
 def block(method):
     """Wrap block output in a standard report section container."""
 
     @wraps(method)
     def wrapped(self, *args, **kwargs):
-        _enable_panel_plotly()
         result = method(self, *args, **kwargs)
 
-        resolved_title = ""
-        body_items = result
+        # get block method results
         if isinstance(result, tuple) and len(result) == 2:
-            resolved_title, body_items = result
-
-        if not resolved_title:
+            title, body = result
+        else:  # handle missing title
+            body = result
             try:
                 bound_args = inspect.signature(method).bind(self, *args, **kwargs)
                 bound_args.apply_defaults()
@@ -134,18 +55,32 @@ def block(method):
             except (TypeError, ValueError):
                 title_value = kwargs.get("title", "")
             if isinstance(title_value, str) and title_value.strip():
-                resolved_title = title_value.strip()
+                title = title_value.strip()
 
-        items = body_items if isinstance(body_items, list) else [body_items]
+        items = body if isinstance(body, list) else [body]
         blocks: list[pn.viewable.Viewable] = []
-        if resolved_title:
-            heading_prefix = "###" if getattr(self, "_inside_group", False) else "#"
-            blocks.append(_add_css_classes(pn.pane.Markdown(f"{heading_prefix} {resolved_title}"), "section-title"))
-        blocks.extend(
-            _auto_style_viewable(self._coerce_viewable(item), method_name=method.__name__)
-            for item in items
-            if item is not None
-        )
+
+        heading_prefix = "###" if getattr(self, "_inside_group", False) else "#"
+        blocks.append(_add_css_classes(pn.pane.Markdown(f"{heading_prefix} {title}"), "section-title"))
+
+        # Gestion de la grille row/columns du contenu à afficher
+        for item in items:
+            if isinstance(item, tuple):
+                row = pn.Row(
+                    *[
+                        _auto_style_viewable(_coerce_viewable(i), method_name=method.__name__)
+                        for i in item
+                        if i is not None
+                    ],
+                    sizing_mode="stretch_width",
+                )
+            elif item is not None:
+                row = _auto_style_viewable(_coerce_viewable(item), method_name=method.__name__)
+            else:
+                continue
+
+            blocks.append(row)
+
         return pn.Column(*blocks, css_classes=["section-block"], sizing_mode="stretch_width")
 
     return wrapped
@@ -183,7 +118,6 @@ class ReportBlockMixin:
 
     def render_block(self, block_cfg: dict):
         """Dispatch one YAML block entry to the matching block_* method."""
-        from shapash.report.core import _wrap_section_anchor
 
         block_type = block_cfg.get("type", "")
         params = block_cfg.get("params", {})
@@ -1199,14 +1133,3 @@ class ReportBlockMixin:
     @staticmethod
     def _plotly_pane(fig) -> pn.pane.Plotly:
         return pn.pane.Plotly(fig, config={"responsive": True}, sizing_mode="stretch_width")
-
-    @staticmethod
-    def _coerce_viewable(item: Any) -> pn.viewable.Viewable:
-        if isinstance(item, pn.viewable.Viewable):
-            return item
-        if isinstance(item, str):
-            return pn.pane.Markdown(item)
-        raise TypeError(
-            f"Unsupported block return type: {type(item).__name__}. "
-            "Blocks must return Panel objects (Markdown, DataFrame, Plotly, Select, Row, Column) or strings."
-        )

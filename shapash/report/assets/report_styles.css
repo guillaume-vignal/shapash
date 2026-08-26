@@ -99,7 +99,7 @@ table.dataframe td {
 
 .fit-content-table {
     width: fit-content;
-    max-width: 100%;
+    max-width: 50%;
     overflow-x: auto;
 }
 
