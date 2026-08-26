@@ -3,19 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
+import pandas as pd
 import panel as pn
+import plotly.graph_objs as go
 
 
-@lru_cache(maxsize=1)
-def _enable_panel_plotly() -> None:
-    """Enable Plotly support in Panel extension, cached to run only once per session."""
-    pn.extension("plotly")
-
-
-@lru_cache(maxsize=1)
 def report_js_text() -> str:
     """Load report JavaScript once for Panel report export."""
     js_path = Path(__file__).resolve().parent / "assets" / "report_script.js"
@@ -55,7 +50,6 @@ def apply_report_css(
     base_dir: str | Path | None = None,
 ) -> None:
     """Register smart-report CSS in Panel global configuration."""
-    _enable_panel_plotly()
     css_paths = [Path(__file__).resolve().parent / "assets" / "report_styles.css"]
     css_paths.extend(_resolve_custom_css_paths(custom_css=custom_css, base_dir=base_dir))
 
@@ -63,3 +57,96 @@ def apply_report_css(
         css = css_path.read_text(encoding="utf-8")
         if css not in pn.config.raw_css:
             pn.config.raw_css.append(css)
+
+
+def _dedupe_css_classes(*class_groups: Any) -> list[str]:
+    classes: list[str] = []
+    for group in class_groups:
+        if not group:
+            continue
+        if isinstance(group, str):
+            items = [group]
+        else:
+            items = list(group)
+        for item in items:
+            if item and item not in classes:
+                classes.append(item)
+    return classes
+
+
+def _add_css_classes(viewable: pn.viewable.Viewable, *classes: str) -> pn.viewable.Viewable:
+    current = getattr(viewable, "css_classes", None)
+    merged = _dedupe_css_classes(current, classes)
+    if merged:
+        viewable.css_classes = merged
+    return viewable
+
+
+def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
+    if isinstance(viewable, pn.pane.Markdown):
+        return _add_css_classes(viewable, "content-block")
+
+    if isinstance(viewable, pn.pane.DataFrame):
+        classes = ["kv-table"]
+        if getattr(viewable, "width_policy", None) == "min":
+            classes.append("fit-content-table")
+        return _add_css_classes(viewable, *classes)
+
+    if isinstance(viewable, pn.pane.Plotly):
+        return viewable
+
+    if isinstance(viewable, pn.widgets.Select):
+        return viewable
+
+    param_function_type = getattr(pn.param, "ParamFunction", None)
+    if param_function_type is not None and isinstance(viewable, param_function_type):
+        return viewable
+
+    param_method_type = getattr(pn.param, "ParamMethod", None)
+    if param_method_type is not None and isinstance(viewable, param_method_type):
+        return viewable
+
+    if isinstance(viewable, pn.Row):
+        if method_name == "block_badge_row":
+            for child in getattr(viewable, "objects", []):
+                if isinstance(child, pn.pane.Markdown):
+                    _add_css_classes(child, "badge-pill")
+        return viewable
+
+    if isinstance(viewable, pn.Column):
+        if method_name == "block_project_information":
+            _add_css_classes(viewable, "project-info-grid")
+            for child in getattr(viewable, "objects", []):
+                if isinstance(child, pn.Column):
+                    _add_css_classes(child, "project-info-card")
+                    for grandchild in getattr(child, "objects", []):
+                        _auto_style_viewable(grandchild, method_name=method_name)
+                else:
+                    _auto_style_viewable(child, method_name=method_name)
+            return viewable
+
+        for child in getattr(viewable, "objects", []):
+            _auto_style_viewable(child, method_name=method_name)
+        return viewable
+
+    method_info = f" in '{method_name}'" if method_name else ""
+    allowed_types = "Markdown, DataFrame, Plotly, Select, ParamFunction, ParamMethod, Row, Column"
+    raise TypeError(
+        f"Unsupported Panel object type returned{method_info}: {type(viewable).__name__}. "
+        f"Allowed Panel return types: {allowed_types}."
+    )
+
+
+def _coerce_viewable(item: Any) -> pn.viewable.Viewable:
+    if isinstance(item, pn.viewable.Viewable):
+        return item
+    if isinstance(item, str):
+        return pn.pane.Markdown(item)
+    if isinstance(item, pd.DataFrame):
+        return pn.pane.DataFrame(item, index=False, width_policy="min", sizing_mode="stretch_width")
+    if isinstance(item, go.Figure):
+        return pn.pane.Plotly(item, config={"responsive": True}, sizing_mode="stretch_width")
+    raise TypeError(
+        f"Unsupported block return type: {type(item).__name__}. "
+        "Supported types: strings, pandas DataFrame, Plotly Figures, Panel Viewable."
+    )

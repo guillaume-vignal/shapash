@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 def generate_report(runtime, config_file: Path, output_file: str) -> None:
     """Render a Panel report to an HTML file driven by a YAML config."""
+    pn.extension("plotly")
     cfg_path = config_file.resolve()
     cfg = load_report_config(cfg_path)
     print(f"Loading config → {cfg_path}")
