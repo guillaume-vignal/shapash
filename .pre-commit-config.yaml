@@ -44,7 +44,7 @@ repos:
         # shapash's actual dependencies (dash, pandas, sklearn, ...); pyproject.toml
         # sets ignore_missing_imports=true, which would silently mask them as Any
         # otherwise. Requires `.venv` to be set up.
-        entry: mypy shapash
+        entry: .venv/bin/mypy shapash
         language: system
         pass_filenames: false
         files: ^shapash/.*\.py$

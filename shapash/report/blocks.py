@@ -8,8 +8,9 @@ import inspect
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias, cast
 
+import numpy as np
 import pandas as pd
 import panel as pn
 import yaml
@@ -34,6 +35,8 @@ PALETTE = {
 }
 
 TARGET_DISTRIBUTION_COLORS = {"pred": "#2255aa", "true": "#f4c000"}
+BlockContent: TypeAlias = tuple[str, list[Any]]
+TargetValues: TypeAlias = np.ndarray[Any, Any] | list[Any]
 
 
 def block(method):
@@ -152,9 +155,9 @@ class ReportBlockMixin:
             result = method(**params)
             if isinstance(result, pn.viewable.Viewable):
                 return _wrap_section_anchor(result, block_cfg.get("_section_id"))
-            if isinstance(result, str):
-                return _wrap_section_anchor(pn.pane.Markdown(result), block_cfg.get("_section_id"))
-            return _wrap_section_anchor(pn.panel(result), block_cfg.get("_section_id"))
+            raise TypeError(
+                f"The return type of {method.__name__} is not a panel Viewable. Did you forget the @block decorator?"
+            )
         except Exception as exc:
             logger.error("Block '%s' raised: %s", block_type, exc)
             return render_block_error(block_type, exc)
@@ -206,7 +209,7 @@ class ReportBlockMixin:
         return pn.Column(*blocks, sizing_mode="stretch_width")
 
     @block
-    def block_text(self, title: str = "", body: str = "") -> pn.Column:
+    def block_text(self, title: str = "", body: str = "") -> tuple[str, list[pn.viewable.Viewable]]:
         """Render a markdown text section.
 
         Parameters
@@ -236,7 +239,7 @@ class ReportBlockMixin:
         title: str = "Project information",
         project_info_file: str = "",
         section_name: str | None = None,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render project metadata from a YAML configuration file.
 
         Parameters
@@ -250,8 +253,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing one or more key-value tables.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and panel viewables rendered by the @block decorator.
 
         Examples
         --------
@@ -304,10 +307,10 @@ class ReportBlockMixin:
             sizing_mode="stretch_width",
         )
 
-        return [project_info_grid]
+        return title, [project_info_grid]
 
     @block
-    def block_badge_row(self, title: str = "", badges: list | None = None) -> pn.Column:
+    def block_badge_row(self, title: str = "", badges: list | None = None) -> BlockContent:
         """Render a row of summary badges.
 
         Parameters
@@ -319,8 +322,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing a horizontal row of badge elements.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and badge row content rendered by the @block decorator.
 
         Examples
         --------
@@ -368,7 +371,7 @@ class ReportBlockMixin:
         )
 
     @block
-    def block_global_analysis(self, title: str = "") -> pn.Column:
+    def block_global_analysis(self, title: str = "") -> BlockContent:
         """Render global summary statistics for prediction and training datasets.
 
         Parameters
@@ -378,8 +381,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing a global statistics comparison table.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and statistics table content rendered by the @block decorator.
 
         Examples
         --------
@@ -396,7 +399,7 @@ class ReportBlockMixin:
         return title, [pn.pane.DataFrame(stats_table, sizing_mode="stretch_width", css_classes=["kv-table"])]
 
     @block
-    def block_model_analysis(self, title: str = "Model information") -> pn.Column:
+    def block_model_analysis(self, title: str = "Model information") -> BlockContent:
         """Render model metadata and parameter tables.
 
         Parameters
@@ -406,8 +409,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing model identity details and parameter tables.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and model details content rendered by the @block decorator.
 
         Examples
         --------
@@ -458,7 +461,7 @@ class ReportBlockMixin:
                     "Value": [_truncate(val, 300) for _, val in params_items],
                 }
             )
-            params_table = pn.pane.DataFrame(params_df, sizing_mode="stretch_width")
+            params_table = pn.Row(pn.pane.DataFrame(params_df, sizing_mode="stretch_width"))
 
         content: list[pn.viewable.Viewable] = [
             pn.pane.Markdown(
@@ -528,7 +531,7 @@ class ReportBlockMixin:
         dataset_split: str = "data_train_test",
         width: int = 700,
         height: int = 500,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render feature distribution by dataset split.
 
         Parameters
@@ -546,19 +549,19 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the feature distribution plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and feature distribution viewable rendered by the @block decorator.
 
         Examples
         --------
         >>> runtime.block_feature_distribution(feature="age")
         """
-        self._require_train_test_data("feature_distribution")
-        if feature not in self.df_train_test.columns:
+        df_train_test = self._require_train_test_data("feature_distribution")
+        if feature not in df_train_test.columns:
             raise ValueError(f"Unknown feature '{feature}' for feature_distribution block.")
 
         fig = plot_distribution(
-            df_all=self.df_train_test,
+            df_all=df_train_test,
             col=feature,
             hue=dataset_split,
             colors_dict=self._feature_distribution_colors(),
@@ -576,7 +579,7 @@ class ReportBlockMixin:
         max_features: int = 20,
         width: int | None = None,
         height: int = 500,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render a feature correlation matrix.
 
         Parameters
@@ -592,24 +595,24 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the correlations plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and correlations plot content rendered by the @block decorator.
 
         Examples
         --------
         >>> runtime.block_correlations_plot(max_features=15)
         """
-        self._require_train_test_data("correlations_plot")
+        df_train_test = self._require_train_test_data("correlations_plot")
         explainer = self._require_explainer("correlations_plot")
         if width is None:
-            if len(self.df_train_test["data_train_test"].unique()) > 1:
+            if len(df_train_test["data_train_test"].unique()) > 1:
                 resolved_width = 900
             else:
                 resolved_width = 500
         else:
             resolved_width = width
         fig = explainer.plot.correlations_plot(
-            self.df_train_test,
+            df_train_test,
             optimized=True,
             facet_col="data_train_test",
             max_features=max_features,
@@ -619,7 +622,7 @@ class ReportBlockMixin:
         return title, [self._plotly_pane(fig)]
 
     @block
-    def block_feature_importance(self, title: str = "", label=None) -> pn.Column:
+    def block_feature_importance(self, title: str = "", label=None) -> BlockContent:
         """Render global feature importance.
 
         Parameters
@@ -631,8 +634,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the feature-importance figure.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and feature-importance content rendered by the @block decorator.
 
         Examples
         --------
@@ -650,7 +653,7 @@ class ReportBlockMixin:
         label=None,
         max_points: int | None = None,
         include_all_features: bool = False,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render feature contribution plots.
 
         Parameters
@@ -668,8 +671,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing one contribution plot or selector-driven plots.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and contribution content rendered by the @block decorator.
 
         Examples
         --------
@@ -730,7 +733,7 @@ class ReportBlockMixin:
             value=next(iter(feature_panels)),
             sizing_mode="stretch_width",
         )
-        selected_panel = pn.panel(pn.bind(lambda selected: feature_panels[selected], feature_select))
+        selected_panel = pn.panel(pn.bind(cast(Any, lambda selected: feature_panels[selected]), feature_select))
 
         if title is None:
             resolved_title = "Features contribution plots"
@@ -745,7 +748,7 @@ class ReportBlockMixin:
         col1: str | None = None,
         col2: str | None = None,
         max_points: int | None = None,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render an interactions plot between two features.
 
         Parameters
@@ -761,8 +764,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the interactions plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and interactions plot content rendered by the @block decorator.
 
         Examples
         --------
@@ -787,7 +790,7 @@ class ReportBlockMixin:
         title: str = "",
         width: int = 700,
         height: int = 500,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render prediction-versus-true target distribution.
 
         Parameters
@@ -801,8 +804,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the target distribution comparison plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and target distribution content rendered by the @block decorator.
 
         Examples
         --------
@@ -841,7 +844,7 @@ class ReportBlockMixin:
         show_train: bool = True,
         width: int = 700,
         height: int = 500,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render target statistics and target distribution analysis.
 
         Parameters
@@ -857,8 +860,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column combining a target statistics table and distribution plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and target-analysis content rendered by the @block decorator.
 
         Examples
         --------
@@ -933,7 +936,7 @@ class ReportBlockMixin:
         return title, content
 
     @block
-    def block_confusion_matrix(self, title: str = "") -> pn.Column:
+    def block_confusion_matrix(self, title: str = "") -> BlockContent:
         """Render confusion matrix for classification predictions.
 
         Parameters
@@ -943,8 +946,8 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column containing the confusion matrix plot.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and confusion matrix content rendered by the @block decorator.
 
         Examples
         --------
@@ -953,7 +956,9 @@ class ReportBlockMixin:
         explainer = self._require_explainer("confusion_matrix")
         if self.y_test is None or self.y_pred is None:
             raise ValueError("confusion_matrix block requires y_test and predicted values from the explainer.")
-        fig = plot_confusion_matrix(y_true=self.y_test, y_pred=self.y_pred, colors_dict=explainer.colors_dict)
+        y_test = cast(TargetValues, self.y_test)
+        y_pred = cast(TargetValues, self.y_pred)
+        fig = plot_confusion_matrix(y_true=y_test, y_pred=y_pred, colors_dict=explainer.colors_dict)
         if title is None:
             return "Confusion matrix", [self._plotly_pane(fig)]
         return title, [self._plotly_pane(fig)]
@@ -963,7 +968,7 @@ class ReportBlockMixin:
         self,
         title: str = "Univariate analysis",
         show_train: bool = True,
-    ) -> pn.Column:
+    ) -> BlockContent:
         """Render per-feature univariate analysis with interactive selection.
 
         Parameters
@@ -975,17 +980,17 @@ class ReportBlockMixin:
 
         Returns
         -------
-        pn.Column
-            Panel column with a feature selector and corresponding stats/plot content.
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and univariate analysis content rendered by the @block decorator.
 
         Examples
         --------
         >>> runtime.block_univariate_analysis()
         """
-        self._require_train_test_data("univariate_analysis")
+        df_train_test = self._require_train_test_data("univariate_analysis")
         explainer = self._require_explainer("univariate_analysis")
 
-        df = self.df_train_test
+        df = df_train_test
         col_splitter = "data_train_test"
         names = ["Prediction dataset", "Training dataset"]
 
@@ -1058,7 +1063,7 @@ class ReportBlockMixin:
             value=next(iter(feature_panels)),
             sizing_mode="stretch_width",
         )
-        selected_panel = pn.panel(pn.bind(lambda selected: feature_panels[selected], feature_select))
+        selected_panel = pn.panel(pn.bind(cast(Any, lambda selected: feature_panels[selected]), feature_select))
 
         return title, [feature_select, selected_panel]
 
@@ -1072,7 +1077,9 @@ class ReportBlockMixin:
         return x_train_pre
 
     @staticmethod
-    def _get_values_and_name(y: pd.DataFrame | pd.Series | list | None, default_name: str) -> tuple[object, str | None]:
+    def _get_values_and_name(
+        y: pd.DataFrame | pd.Series | list[Any] | None, default_name: str
+    ) -> tuple[TargetValues | None, str | None]:
         if y is None:
             return None, None
         if isinstance(y, pd.DataFrame):
@@ -1105,9 +1112,10 @@ class ReportBlockMixin:
             raise ValueError(f"{block_type} block requires an explainer on the report instance.")
         return self.explainer
 
-    def _require_train_test_data(self, block_type: str) -> None:
+    def _require_train_test_data(self, block_type: str) -> pd.DataFrame:
         if self.df_train_test is None:
             raise ValueError(f"{block_type} block requires x_train and explainer.x_init data on the report instance.")
+        return self.df_train_test
 
     def _resolve_interaction_pair(self, col1: str | None, col2: str | None) -> tuple[str, str]:
         if col1 and col2:

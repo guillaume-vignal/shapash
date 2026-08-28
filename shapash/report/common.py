@@ -1,7 +1,7 @@
 import builtins
 import os
-from collections.abc import Callable
 import shutil
+from collections.abc import Callable
 from enum import Enum
 from importlib import import_module
 from numbers import Number

@@ -4,16 +4,12 @@ Smart explainer module
 
 import copy
 import logging
-import shutil
-import tempfile
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from werkzeug.serving import make_server
-
-import yaml
 
 import shapash.explainer.smart_predictor
 from shapash.backend import BaseBackend, get_backend_cls_from_name
