@@ -1,0 +1,72 @@
+# default_report_classification_titanic.yml
+# Smart report configuration for Titanic binary classification (survival).
+
+sections:
+  - type: header
+    params:
+      title: "Titanic survival report"
+      subtitle: >
+        This document summarizes a binary classification model predicting
+        passenger survival on the Titanic dataset.
+
+  - type: model_analysis
+    params:
+      title: "Model analysis"
+
+  - type: group
+    params:
+      title: "Dataset analysis"
+    blocks:
+      - type: global_analysis
+        params:
+          title: "Global analysis"
+
+      - type: univariate_analysis
+        params:
+          title: "Univariate analysis"
+
+      - type: target_analysis
+        params:
+          title: "Target analysis"
+          show_train: true
+
+      - type: correlations_plot
+        params:
+          title: "Multivariate analysis"
+          max_features: 20
+
+  - type: group
+    params:
+      title: "Model performance"
+    blocks:
+      - type: confusion_matrix
+        params:
+          title: "Confusion matrix"
+
+      - type: lift_curve
+        params:
+          title: "Lift curve"
+          label: 1
+
+      - type: target_distribution
+        params:
+          title: "Target distribution"
+
+      - type: performance_metrics
+        params:
+          title: "Metrics"
+          metrics:
+            - path: "sklearn.metrics.accuracy_score"
+              name: "Accuracy"
+            - path: "sklearn.metrics.precision_score"
+              name: "Precision"
+            - path: "sklearn.metrics.recall_score"
+              name: "Recall"
+            - path: "sklearn.metrics.f1_score"
+              name: "F1"
+
+  - type: callout
+    params:
+      body: >
+        This report uses built-in blocks only. You can later plug a custom
+        block runtime to extend the layout.

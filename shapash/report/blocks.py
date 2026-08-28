@@ -15,7 +15,7 @@ import pandas as pd
 import panel as pn
 import yaml
 
-from shapash.plots.plot_evaluation_metrics import plot_confusion_matrix
+from shapash.plots.plot_evaluation_metrics import plot_confusion_matrix, plot_lift_curve
 from shapash.plots.plot_univariate import plot_distribution
 from shapash.report.common import compute_col_types, series_dtype
 from shapash.report.core import _wrap_section_anchor
@@ -961,6 +961,81 @@ class ReportBlockMixin:
         fig = plot_confusion_matrix(y_true=y_test, y_pred=y_pred, colors_dict=explainer.colors_dict)
         if title is None:
             return "Confusion matrix", [self._plotly_pane(fig)]
+        return title, [self._plotly_pane(fig)]
+
+    @block
+    def block_lift_curve(
+        self,
+        title: str = "",
+        label: int | str = -1,
+        selection: list[Any] | None = None,
+        nb: int = 100,
+        target_fraction: float = 0.1,
+        max_points: int = 2000,
+        width: int = 900,
+        height: int = 600,
+    ) -> BlockContent:
+        """Render lift curve for classification probabilities.
+
+        Parameters
+        ----------
+        title : str, default=""
+            Optional section title.
+        label : int or str, default=-1
+            Class identifier used to select the target probability column.
+        selection : list[Any] or None, default=None
+            Optional subset of sample indices to include.
+        nb : int, default=100
+            Number of intervals used to build the curve.
+        target_fraction : float, default=0.1
+            Share of ranked population used to compute Lift@k.
+        max_points : int, default=2000
+            Maximum number of observations used by the plot.
+        width : int, default=900
+            Plot width in pixels.
+        height : int, default=600
+            Plot height in pixels.
+
+        Returns
+        -------
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and lift curve content rendered by the @block decorator.
+
+        Examples
+        --------
+        >>> runtime.block_lift_curve()
+        """
+        explainer = self._require_explainer("lift_curve")
+
+        if getattr(explainer, "_case", None) != "classification":
+            raise ValueError("lift_curve block is only available for classification case.")
+
+        if explainer.y_target is None:
+            raise ValueError("lift_curve block requires target values on the explainer.")
+
+        label_num, label_code, label_value = explainer.check_label_name(label)
+
+        if explainer.proba_values is None:
+            explainer.predict_proba()
+
+        fig = plot_lift_curve(
+            x_data=explainer.x_init,
+            y_target=explainer.y_target,
+            y_proba_values=explainer.proba_values,
+            style_dict=explainer.plot._style_dict,
+            selection=selection,
+            label_num=label_num,
+            label_code=label_code,
+            label_value=label_value,
+            nb=nb,
+            target_fraction=target_fraction,
+            max_points=max_points,
+            width=width,
+            height=height,
+        )
+
+        if title is None:
+            return "Lift curve", [self._plotly_pane(fig)]
         return title, [self._plotly_pane(fig)]
 
     @block

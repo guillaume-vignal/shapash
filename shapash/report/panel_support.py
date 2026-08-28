@@ -98,6 +98,10 @@ def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
     if isinstance(viewable, pn.widgets.Select):
         return viewable
 
+    tabulator_type = getattr(pn.widgets, "Tabulator", None)
+    if tabulator_type is not None and isinstance(viewable, tabulator_type):
+        return viewable
+
     param_function_type = getattr(pn.param, "ParamFunction", None)
     if param_function_type is not None and isinstance(viewable, param_function_type):
         return viewable
@@ -130,7 +134,7 @@ def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
         return viewable
 
     method_info = f" in '{method_name}'" if method_name else ""
-    allowed_types = "Markdown, DataFrame, Plotly, Select, ParamFunction, ParamMethod, Row, Column"
+    allowed_types = "Markdown, DataFrame, Plotly, Select, Tabulator, ParamFunction, ParamMethod, Row, Column"
     raise TypeError(
         f"Unsupported Panel object type returned{method_info}: {type(viewable).__name__}. "
         f"Allowed Panel return types: {allowed_types}."
