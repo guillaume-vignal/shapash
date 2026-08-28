@@ -288,7 +288,7 @@ class ReportBlockMixin:
                 continue
             df = pd.DataFrame(
                 [(key, str(value)) for key, value in section_values.items()],
-                columns=["", ""],
+                columns=["Field", "Value"],
             )
             blocks.append(
                 pn.Column(
@@ -343,7 +343,7 @@ class ReportBlockMixin:
                 )
             )
 
-        return title, [pn.Row(*pills, sizing_mode="stretch_width")]
+        return title, [tuple(pills)]
 
     def block_callout(self, body: str = "") -> pn.Column:
         """Render a highlighted callout message.
@@ -396,7 +396,7 @@ class ReportBlockMixin:
             train_stats=train_stats,
             names=["Prediction dataset", "Training dataset"],
         )
-        return title, [pn.pane.DataFrame(stats_table, sizing_mode="stretch_width", css_classes=["kv-table"])]
+        return title, [stats_table]
 
     @block
     def block_model_analysis(self, title: str = "Model information") -> BlockContent:
@@ -448,12 +448,7 @@ class ReportBlockMixin:
                     "Value": [_truncate(val, 300) for _, val in params_items[split_idx:]],
                 }
             )
-            params_table = pn.Row(
-                pn.pane.DataFrame(left_df, sizing_mode="stretch_width"),
-                pn.Spacer(width=24),
-                pn.pane.DataFrame(right_df, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width",
-            )
+            params_table = (left_df, pn.Spacer(width=24), right_df)
         else:
             params_df = pd.DataFrame(
                 {
@@ -461,9 +456,9 @@ class ReportBlockMixin:
                     "Value": [_truncate(val, 300) for _, val in params_items],
                 }
             )
-            params_table = pn.Row(pn.pane.DataFrame(params_df, sizing_mode="stretch_width"))
+            params_table = params_df
 
-        content: list[pn.viewable.Viewable] = [
+        content: list[Any] = [
             pn.pane.Markdown(
                 "\n".join(
                     [
@@ -569,8 +564,8 @@ class ReportBlockMixin:
             height=height,
         )
         if title is None:
-            return self._feature_label(feature), [self._plotly_pane(fig)]
-        return title, [self._plotly_pane(fig)]
+            return self._feature_label(feature), [fig]
+        return title, [fig]
 
     @block
     def block_correlations_plot(
@@ -619,7 +614,7 @@ class ReportBlockMixin:
             width=resolved_width,
             height=height,
         )
-        return title, [self._plotly_pane(fig)]
+        return title, [fig]
 
     @block
     def block_feature_importance(self, title: str = "", label=None) -> BlockContent:
@@ -643,7 +638,7 @@ class ReportBlockMixin:
         """
         explainer = self._require_explainer("feature_importance")
         fig = explainer.plot.features_importance(label=label)
-        return title, [self._plotly_pane(fig)]
+        return title, [fig]
 
     @block
     def block_contribution_plot(
@@ -693,8 +688,8 @@ class ReportBlockMixin:
                 if trace.type == "bar":
                     trace.marker.color = "lightgrey"
             if title is None:
-                return self._feature_label(feature), [self._plotly_pane(fig)]
-            return title, [self._plotly_pane(fig)]
+                return self._feature_label(feature), [fig]
+            return title, [fig]
 
         if getattr(explainer, "x_init", None) is None:
             raise ValueError("contribution_plot block with include_all_features=True requires explainer.x_init.")
@@ -725,7 +720,7 @@ class ReportBlockMixin:
             while label_text in feature_panels:
                 label_text = f"{base_label} ({suffix})"
                 suffix += 1
-            feature_panels[label_text] = self._plotly_pane(fig)
+            feature_panels[label_text] = fig
 
         feature_select = pn.widgets.Select(
             name="Feature",
@@ -782,7 +777,7 @@ class ReportBlockMixin:
             resolved_title = f"{self._feature_label(feature_one)} / {self._feature_label(feature_two)}"
         else:
             resolved_title = title
-        return resolved_title, [self._plotly_pane(fig)]
+        return resolved_title, [fig]
 
     @block
     def block_target_distribution(
@@ -834,8 +829,8 @@ class ReportBlockMixin:
             height=height,
         )
         if title is None:
-            return "Target distribution", [self._plotly_pane(fig)]
-        return title, [self._plotly_pane(fig)]
+            return "Target distribution", [fig]
+        return title, [fig]
 
     @block
     def block_target_analysis(
@@ -927,11 +922,7 @@ class ReportBlockMixin:
         dtype_label = str(series_dtype(y_test_series))
         content = [
             pn.pane.Markdown(f"**{target_name}** ({dtype_label})"),
-            pn.Row(
-                pn.pane.DataFrame(target_stats, width_policy="min"),
-                self._plotly_pane(fig),
-                sizing_mode="stretch_width",
-            ),
+            (target_stats, fig),
         ]
         return title, content
 
@@ -960,8 +951,8 @@ class ReportBlockMixin:
         y_pred = cast(TargetValues, self.y_pred)
         fig = plot_confusion_matrix(y_true=y_test, y_pred=y_pred, colors_dict=explainer.colors_dict)
         if title is None:
-            return "Confusion matrix", [self._plotly_pane(fig)]
-        return title, [self._plotly_pane(fig)]
+            return "Confusion matrix", [fig]
+        return title, [fig]
 
     @block
     def block_lift_curve(
@@ -1035,8 +1026,8 @@ class ReportBlockMixin:
         )
 
         if title is None:
-            return "Lift curve", [self._plotly_pane(fig)]
-        return title, [self._plotly_pane(fig)]
+            return "Lift curve", [fig]
+        return title, [fig]
 
     @block
     def block_univariate_analysis(
@@ -1114,8 +1105,8 @@ class ReportBlockMixin:
             tab_body = pn.Column(
                 pn.pane.Markdown(f"**{col_label}** ({dtype_label})"),
                 pn.Row(
-                    pn.pane.DataFrame(col_stats, width_policy="min"),
-                    self._plotly_pane(fig),
+                    _coerce_viewable(col_stats),
+                    _coerce_viewable(fig),
                     sizing_mode="stretch_width",
                 ),
                 sizing_mode="stretch_width",
@@ -1212,7 +1203,3 @@ class ReportBlockMixin:
     def _feature_distribution_colors(self) -> dict:
         explainer = self._require_explainer("feature_distribution")
         return explainer.colors_dict["report_feature_distribution"]
-
-    @staticmethod
-    def _plotly_pane(fig) -> pn.pane.Plotly:
-        return pn.pane.Plotly(fig, config={"responsive": True}, sizing_mode="stretch_width")

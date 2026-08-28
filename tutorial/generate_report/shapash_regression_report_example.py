@@ -11,7 +11,6 @@ import os
 import sys
 
 import pandas as pd
-import panel as pn
 from category_encoders import OrdinalEncoder
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -51,12 +50,12 @@ class CustomRegressionReportBlocks(ReportBlockMixin):
             columns=["Metric", "Value"],
         )
 
-        explanation = pn.pane.Markdown(
+        explanation = (
             "This section summarizes global regression error levels. "
             "A strong gap between median and 95th percentile absolute error usually highlights "
             "a subset of difficult cases worth deeper explainability analysis."
         )
-        return title, [explanation, pn.pane.DataFrame(summary_df, index=False, sizing_mode="stretch_width")]
+        return title, [explanation, summary_df]
 
     @block
     def block_largest_errors_focus(self, title: str = "Largest absolute errors", top_k: int = 10):
@@ -73,7 +72,7 @@ class CustomRegressionReportBlocks(ReportBlockMixin):
 
         focus = details.sort_values("abs_error", ascending=False).head(top_k).copy()
         if focus.empty:
-            return title, [pn.pane.Markdown("No rows available to compute largest errors.")]
+            return title, ["No rows available to compute largest errors."]
 
         focus = focus.rename(columns={"true": "True", "pred": "Pred", "residual": "Residual", "abs_error": "AbsError"})
 
@@ -88,17 +87,11 @@ class CustomRegressionReportBlocks(ReportBlockMixin):
         for col in ["True", "Pred", "Residual", "AbsError"]:
             focus[col] = focus[col].map(lambda x: round(float(x), 2))
 
-        info = pn.pane.Markdown(
+        info = (
             "Rows below are the largest absolute errors. "
             "They are ideal candidates for local contribution plots and feature-level investigation."
         )
-        table = pn.widgets.Tabulator(
-            focus.reset_index(drop=False),
-            disabled=True,
-            layout="fit_data_table",
-            width_policy="max",
-            sizing_mode="stretch_width",
-        )
+        table = focus.reset_index(drop=False)
         return title, [info, table]
 
 

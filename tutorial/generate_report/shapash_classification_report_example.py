@@ -11,7 +11,6 @@ import os
 import sys
 
 import pandas as pd
-import panel as pn
 from category_encoders import OrdinalEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
@@ -54,13 +53,13 @@ class CustomClassificationReportBlocks(ReportBlockMixin):
             columns=["Metric", "Value"],
         )
 
-        summary = pn.pane.Markdown(
+        summary = (
             "This block highlights where the classifier makes mistakes. "
             "False positives are non-survivors predicted as survivors, while false negatives "
             "are survivors predicted as non-survivors."
         )
 
-        return title, [summary, pn.pane.DataFrame(metrics_df, index=False, sizing_mode="stretch_width")]
+        return title, [summary, metrics_df]
 
     @block
     def block_misclassification_focus(
@@ -88,7 +87,7 @@ class CustomClassificationReportBlocks(ReportBlockMixin):
         wrong = analysis[analysis["true"] != analysis["pred"]].copy()
 
         if wrong.empty:
-            return title, [pn.pane.Markdown("No misclassification found on the evaluated dataset.")]
+            return title, ["No misclassification found on the evaluated dataset."]
 
         wrong["wrong_confidence"] = wrong.apply(
             lambda row: row["proba_survived"] if row["pred"] == 1 else 1 - row["proba_survived"], axis=1
@@ -102,17 +101,11 @@ class CustomClassificationReportBlocks(ReportBlockMixin):
         display_df["P(Survived)"] = display_df["P(Survived)"].map(lambda x: round(float(x), 3))
         display_df["wrong_confidence"] = display_df["wrong_confidence"].map(lambda x: round(float(x), 3))
 
-        text = pn.pane.Markdown(
+        text = (
             "Rows below are the most confident wrong predictions. "
             "They are useful to inspect possible data drift, noise, or feature blind spots."
         )
-        table = pn.widgets.Tabulator(
-            display_df.reset_index(drop=False),
-            disabled=True,
-            layout="fit_data_table",
-            width_policy="max",
-            sizing_mode="stretch_width",
-        )
+        table = display_df.reset_index(drop=False)
         return title, [text, table]
 
 
