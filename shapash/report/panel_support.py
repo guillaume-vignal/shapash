@@ -10,6 +10,9 @@ import pandas as pd
 import panel as pn
 import plotly.graph_objs as go
 
+# Use Tabulator only for wide tables; smaller tables keep the simpler DataFrame pane rendering.
+TABULATOR_MIN_COLUMNS = 10
+
 
 def report_js_text() -> str:
     """Load report JavaScript once for Panel report export."""
@@ -100,6 +103,9 @@ def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
 
     tabulator_type = getattr(pn.widgets, "Tabulator", None)
     if tabulator_type is not None and isinstance(viewable, tabulator_type):
+        return _add_css_classes(viewable, "kv-table")
+
+    if isinstance(viewable, pn.Spacer):
         return viewable
 
     param_function_type = getattr(pn.param, "ParamFunction", None)
@@ -134,7 +140,7 @@ def _auto_style_viewable(viewable: Any, method_name: str | None = None) -> Any:
         return viewable
 
     method_info = f" in '{method_name}'" if method_name else ""
-    allowed_types = "Markdown, DataFrame, Plotly, Select, Tabulator, ParamFunction, ParamMethod, Row, Column"
+    allowed_types = "Markdown, DataFrame, Plotly, Select, Tabulator, Spacer, ParamFunction, ParamMethod, Row, Column"
     raise TypeError(
         f"Unsupported Panel object type returned{method_info}: {type(viewable).__name__}. "
         f"Allowed Panel return types: {allowed_types}."
@@ -147,6 +153,16 @@ def _coerce_viewable(item: Any) -> pn.viewable.Viewable:
     if isinstance(item, str):
         return pn.pane.Markdown(item)
     if isinstance(item, pd.DataFrame):
+        tabulator_type = getattr(pn.widgets, "Tabulator", None)
+        if tabulator_type is not None and item.shape[1] > TABULATOR_MIN_COLUMNS:
+            return tabulator_type(
+                item,
+                disabled=True,
+                show_index=False,
+                layout="fit_columns",
+                width_policy="max",
+                sizing_mode="stretch_width",
+            )
         return pn.pane.DataFrame(item, index=False, width_policy="min", sizing_mode="stretch_width")
     if isinstance(item, go.Figure):
         return pn.pane.Plotly(item, config={"responsive": True}, sizing_mode="stretch_width")
