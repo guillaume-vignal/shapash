@@ -579,7 +579,7 @@ class SmartExplainer:
         if columns_order is not None:
             self.columns_order = self._compile_columns_order(columns_order)
 
-    def get_interaction_values(self, n_samples_max=None, selection=None):
+    def get_interaction_values(self, n_samples_max=None, selection=None, label=None):
         """
         Compute SHAP interaction values for the encoded dataset.
 
@@ -600,6 +600,9 @@ class SmartExplainer:
         selection : list of int, optional
             List of specific sample indices for which to compute interactions.
             Useful to focus on a subset of the dataset rather than the entire `x_encoded`.
+        label : int or str, optional
+            Class label to select in classification settings.
+            If None, interaction values are aggregated across classes/outputs.
 
         Returns
         -------
@@ -609,16 +612,31 @@ class SmartExplainer:
             and `k` for sample `i`.
         """
         x = copy.deepcopy(self.x_encoded)
+        label_num = None
+
+        if self._case == "classification" and label is not None:
+            label_num = self.check_label_name(label)[0]
 
         if selection:
             x = x.loc[selection]
 
         if hasattr(self, "x_interaction"):
             if self.x_interaction.equals(x[:n_samples_max]):
-                return self.interaction_values
+                # Backward compatibility: if interactions were precomputed manually
+                # (e.g., in tests or custom workflows) before label-aware cache metadata,
+                # reuse them instead of forcing a backend recomputation.
+                if not hasattr(self, "_interaction_label"):
+                    return self.interaction_values
+                if self._interaction_label == label_num:
+                    return self.interaction_values
 
         self.x_interaction = x[:n_samples_max]
-        self.interaction_values = get_shap_interaction_values(self.x_interaction, self.backend.explainer)
+        self.interaction_values = get_shap_interaction_values(
+            self.x_interaction,
+            self.backend.explainer,
+            class_index=label_num,
+        )
+        self._interaction_label = label_num
         return self.interaction_values
 
     def check_postprocessing_modif_strings(self, postprocessing=None):

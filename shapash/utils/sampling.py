@@ -86,6 +86,10 @@ def _intelligent_sampling(data, max_points, col, col_value_count, random_seed):
     Performs intelligent sampling based on the distribution of values in the specified column.
     """
     rng = np.random.default_rng(seed=random_seed)
+
+    if isinstance(col, (tuple, list)) and len(col) == 2:
+        return _intelligent_sampling_pair(data, max_points, col, random_seed, rng)
+
     is_col_str = True
     if data[col].dtype.kind in "fc":
         try:
@@ -108,6 +112,55 @@ def _intelligent_sampling(data, max_points, col, col_value_count, random_seed):
     selection_weights /= selection_weights.sum()
     selected_indices = rng.choice(data.index.tolist(), max_points, p=selection_weights, replace=False)
     return selected_indices
+
+
+def _intelligent_sampling_pair(data, max_points, col, random_seed, rng):
+    """
+    Performs intelligent sampling on a crossed pair of variables.
+
+    For categorical-like pairs, sampling is balanced across joint modalities.
+    For two numeric variables with enough variability, 2D KMeans clusters are used.
+    """
+    col1, col2 = col
+
+    joint_labels = _build_joint_labels(data[col1], data[col2])
+    both_numeric = _is_numeric_like(data[col1]) and _is_numeric_like(data[col2])
+
+    # Keep a categorical-like strategy when the crossed space has few modalities.
+    low_joint_cardinality = joint_labels.nunique(dropna=False) < len(joint_labels) / 20
+
+    if both_numeric and not low_joint_cardinality:
+        n_clusters = min(100, len(data) // 20)
+        if n_clusters < 2:
+            return rng.choice(data.index.tolist(), max_points, replace=False)
+
+        numeric_df = data[[col1, col2]].apply(pd.to_numeric, errors="coerce")
+        numeric_df = numeric_df.fillna(numeric_df.median()).fillna(0)
+
+        kmeans = KMeans(n_clusters=n_clusters, random_state=random_seed, n_init="auto")
+        cluster_labels = pd.Series(kmeans.fit_predict(numeric_df.values), index=data.index)
+    else:
+        cluster_labels = joint_labels
+
+    cluster_counts = cluster_labels.value_counts()
+    weights = cluster_counts.apply(lambda x: (x**0.5) / x).to_dict()
+    selection_weights = cluster_labels.apply(lambda x: weights[x])
+    selection_weights /= selection_weights.sum()
+    selected_indices = rng.choice(data.index.tolist(), max_points, p=selection_weights, replace=False)
+    return selected_indices
+
+
+def _build_joint_labels(series1, series2):
+    left = series1.astype(object).where(~series1.isna(), "missing")
+    right = series2.astype(object).where(~series2.isna(), "missing")
+    return left.astype(str) + "||" + right.astype(str)
+
+
+def _is_numeric_like(series):
+    if series.dtype.kind in "biufc":
+        return True
+    coerced = pd.to_numeric(series, errors="coerce")
+    return coerced.notna().all()
 
 
 def _format_additional_note(df, selected_indices, additional_note):

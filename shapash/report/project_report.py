@@ -451,7 +451,7 @@ class ProjectReport:
                 list_ind, _ = self.explainer.plot._select_indices_interactions_plot(
                     selection=None, max_points=self.max_points
                 )
-                interaction_values = self.explainer.get_interaction_values(selection=list_ind)
+                interaction_values = self.explainer.get_interaction_values(selection=list_ind, label=label)
                 sorted_top_features_indices = compute_sorted_variables_interactions_list_indices(interaction_values)
                 indices_to_plot = sorted_top_features_indices[: self.nb_top_interactions]
 
@@ -461,6 +461,7 @@ class ProjectReport:
                     fig_one_interaction = self.explainer.plot.interactions_plot(
                         col1=self.explainer.columns_dict[id0],
                         col2=self.explainer.columns_dict[id1],
+                        label=label,
                         max_points=self.max_points,
                     )
 
