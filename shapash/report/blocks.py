@@ -7,13 +7,11 @@ import importlib.metadata
 import inspect
 import logging
 from functools import wraps
-from pathlib import Path
 from typing import Any, TypeAlias, cast
 
 import numpy as np
 import pandas as pd
 import panel as pn
-import yaml
 
 from shapash.plots.plot_evaluation_metrics import plot_confusion_matrix, plot_lift_curve
 from shapash.plots.plot_univariate import plot_distribution
@@ -215,105 +213,34 @@ class ReportBlockMixin:
         return pn.Column(*blocks, sizing_mode="stretch_width")
 
     @block
-    def block_text(self, title: str = "", body: str = "") -> tuple[str, list[pn.viewable.Viewable]]:
-        """Render a markdown text section.
+    def block_text(self, title: str = "", content: dict[str, str] | str | None = None) -> BlockContent:
+        """Render a key/value text list from YAML items.
 
         Parameters
         ----------
         title : str, default=""
             Optional section title.
-        body : str, default=""
-            Markdown content displayed in the block body.
+        content : dict[str, str], str or None, default=None
+            Dict of entries. For example ``{"version": "0.7", "name": "My project"}``.
+            Or markdown text.
 
         Returns
         -------
-        pn.Column
-            Panel column containing the wrapped text section.
-
-        Examples
-        --------
-        >>> runtime.block_text(title="Context", body="This report compares train and test data.")
+        tuple[str, list[str]]
+            Section title and markdown content rendered by the @block decorator.
         """
-        content: list[pn.viewable.Viewable] = []
-        if body:
-            content.append(pn.pane.Markdown(body))
-        return title, content
+        if not content:
+            return title, ["No information available."]
 
-    @block
-    def block_project_information(
-        self,
-        title: str = "Project information",
-        project_info_file: str = "",
-        section_name: str | None = None,
-    ) -> BlockContent:
-        """Render project metadata from a YAML configuration file.
+        lines: list[str] = []
+        if isinstance(content, dict):
+            for key, value in content.items():
+                lines.append(f"**{key}** : {value}")
+        else:
+            lines.append(str(content))
 
-        Parameters
-        ----------
-        title : str, default="Project information"
-            Section title displayed above the metadata cards.
-        project_info_file : str, default=""
-            Path to a YAML file containing top-level mapping sections.
-        section_name : str or None, default=None
-            Optional section key to render only one subsection from the YAML file.
-
-        Returns
-        -------
-        tuple[str, list[pn.viewable.Viewable]]
-            Section title and panel viewables rendered by the @block decorator.
-
-        Examples
-        --------
-        >>> runtime.block_project_information(project_info_file="project_info.yaml")
-        """
-        if not project_info_file:
-            raise ValueError("project_information block requires the 'project_info_file' parameter.")
-
-        config_path = Path(project_info_file).expanduser()
-        if not config_path.is_absolute():
-            config_path = Path.cwd() / config_path
-        config_path = config_path.resolve()
-        if not config_path.exists():
-            raise ValueError(f"project_information file not found: {config_path}")
-
-        with config_path.open(encoding="utf-8") as stream:
-            project_info = yaml.safe_load(stream)
-        if project_info is None:
-            project_info = {}
-        if not isinstance(project_info, dict):
-            raise ValueError("project_information YAML must define a top-level mapping.")
-
-        if section_name is not None:
-            if section_name not in project_info:
-                raise ValueError(f"Unknown project_information section: {section_name}")
-            project_info = {section_name: project_info[section_name]}
-
-        blocks: list[pn.viewable.Viewable] = []
-        for current_section_name, section_values in project_info.items():
-            if not isinstance(section_values, dict):
-                continue
-            df = pd.DataFrame(
-                [(key, str(value)) for key, value in section_values.items()],
-                columns=["Field", "Value"],
-            )
-            blocks.append(
-                pn.Column(
-                    pn.pane.Markdown(f"### {current_section_name}"),
-                    pn.pane.DataFrame(df, index=False, sizing_mode="stretch_width"),
-                    sizing_mode="stretch_width",
-                )
-            )
-
-        if not blocks:
-            blocks = [pn.pane.Markdown("No project information available.")]
-
-        project_info_grid = pn.Column(
-            *blocks,
-            css_classes=["project-info-grid"],
-            sizing_mode="stretch_width",
-        )
-
-        return title, [project_info_grid]
+        # Use markdown hard line breaks so each key/value appears on its own line.
+        return title, ["  \n".join(lines)]
 
     @block
     def block_badge_row(self, title: str = "", badges: list | None = None) -> BlockContent:
