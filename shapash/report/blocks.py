@@ -40,7 +40,13 @@ TargetValues: TypeAlias = np.ndarray[Any, Any] | list[Any]
 
 
 def block(method):
-    """Wrap block output in a standard report section container."""
+    """Wrap block output in a standard report section container.
+
+    Decorated methods can return either ``(title, body)`` or a bare body value.
+    The body may be a single supported item or a list of supported items. Each
+    item can be a string, a pandas ``DataFrame``, a Plotly figure, or a Panel
+    viewable. Tuples inside the body are rendered as horizontal rows.
+    """
 
     @wraps(method)
     def wrapped(self, *args, **kwargs):
@@ -728,7 +734,9 @@ class ReportBlockMixin:
             value=next(iter(feature_panels)),
             sizing_mode="stretch_width",
         )
-        selected_panel = pn.panel(pn.bind(cast(Any, lambda selected: feature_panels[selected]), feature_select))
+        selected_panel = pn.panel(
+            pn.bind(cast(Any, lambda selected: feature_panels[selected]), feature_select), sizing_mode="stretch_width"
+        )
 
         if title is None:
             resolved_title = "Features contribution plots"
