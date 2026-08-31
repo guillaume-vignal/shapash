@@ -35,6 +35,7 @@ from shapash.utils.utils import get_host_name
 from shapash.webapp.smart_app import SmartApp
 
 try:
+    from shapash.report import ReportTemplate
     from shapash.report.blocks import ReportBlockMixin
     from shapash.report.core import generate_report as generate_smart_report
 except ImportError:
@@ -1765,11 +1766,15 @@ class SmartExplainer:
                 y_test=y_test,
                 max_points=max_points,
             )
+        if self._case == "classification":
+            default_report = ReportTemplate.DEFAULT_CLASSIFICATION
+        else:
+            default_report = ReportTemplate.DEFAULT_REGRESSION
 
         config_file = (
             Path(yaml_path)
             if yaml_path is not None
-            else Path(__file__).resolve().parent.parent / "report" / "assets" / "default_report.yml"
+            else Path(__file__).resolve().parent.parent / "report" / "assets" / str(default_report)
         )
 
         generate_smart_report(

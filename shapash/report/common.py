@@ -15,7 +15,10 @@ from shapash.utils.dtypes import is_text_like
 class ReportTemplate(Enum):
     """Report templates list"""
 
-    DEFAULT = "default_report.yml"
+    DEFAULT_REGRESSION = "default_regression_report.yml"
+    DEFAULT_CLASSIFICATION = "default_classification_report.yml"
+
+    # Other templates could be available
     # MINI = "mini_report.yml"
     # FULL = "full_report.yml"
     # ...
