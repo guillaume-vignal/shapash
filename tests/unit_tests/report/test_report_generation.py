@@ -1,12 +1,89 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import numpy as np
 import panel as pn
 import pandas as pd
 import plotly.graph_objects as go
 
 from shapash.report.blocks import ReportBlockMixin, block
 from shapash.report.panel_support import apply_report_css
+
+
+def dummy_metric(y_true, y_pred):
+    return 0.75
+
+
+class _DummyModel:
+    def __init__(self):
+        self.alpha = 0.1
+        self.depth = 4
+
+    def predict(self, x):
+        return np.zeros(len(x))
+
+
+class _DummyPlot:
+    def __init__(self):
+        self._style_dict = {"dummy": "style"}
+
+    def correlations_plot(self, *args, **kwargs):
+        return go.Figure(go.Scatter(x=[1, 2], y=[2, 1]))
+
+    def features_importance(self, *args, **kwargs):
+        return go.Figure(go.Bar(x=["age", "income"], y=[0.7, 0.3]))
+
+    def contribution_plot(self, *args, **kwargs):
+        return go.Figure(go.Bar(x=["age"], y=[1.0]))
+
+    def interactions_plot(self, *args, **kwargs):
+        return go.Figure(go.Scatter(x=[1, 2], y=[3, 4]))
+
+    def top_interactions_plot(self, *args, **kwargs):
+        return go.Figure(go.Scatter(x=[2, 3], y=[4, 5]))
+
+    def _select_indices_interactions_plot(self, selection=None, max_points=200):
+        return [0, 1], None
+
+
+class _DummyExplainer:
+    def __init__(self, x_init):
+        self.x_init = x_init
+        self.x_encoded = x_init
+        self.y_pred = [1, 0, 1]
+        self.model = _DummyModel()
+        self.preprocessing = None
+        self.postprocessing = None
+        self.features_dict = {"age": "Age", "income": "Income"}
+        self.inv_features_dict = {"Age": "age", "Income": "income"}
+        self.colors_dict = {
+            "report_feature_distribution": {"train": "#f4c000", "test": "#2255aa"},
+            "default": "#2255aa",
+        }
+        self.plot = _DummyPlot()
+        self.columns_dict = {0: "age", 1: "income"}
+        self._case = "classification"
+        self.y_target = [1, 0, 1]
+        self.proba_values = None
+
+    def get_interaction_values(self, selection=None):
+        return np.array([[0.0, 0.5], [0.5, 0.0]])
+
+    def check_label_name(self, label):
+        return 1, "class_1", "class_1"
+
+    def predict_proba(self):
+        self.proba_values = np.array([[0.1, 0.9], [0.8, 0.2], [0.2, 0.8]])
+
+
+def _build_runtime() -> ReportBlockMixin:
+    x_train = pd.DataFrame({"age": [20, 30, 40], "income": [100, 200, 150]})
+    x_test = pd.DataFrame({"age": [21, 31, 41], "income": [110, 210, 160]})
+    y_train = pd.Series([0, 1, 1], name="target")
+    y_test = pd.Series([1, 0, 1], name="target")
+    explainer = _DummyExplainer(x_test)
+    return ReportBlockMixin(explainer=explainer, x_train=x_train, y_train=y_train, y_test=y_test, max_points=10)
 
 
 class TestSmartReportPanel(unittest.TestCase):
@@ -160,3 +237,142 @@ class TestBlockDecorator(unittest.TestCase):
             runtime.block_non_panel_type_not_allowed()
 
         self.assertIn("Unsupported block return type", str(context.exception))
+
+
+class TestReportBlockMixinBuiltins(unittest.TestCase):
+    def test_block_text_accepts_dict_content(self):
+        runtime = _build_runtime()
+
+        result = runtime.block_text(title="Info", content={"project": "shapash", "version": "1.0"})
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Info", result.objects[0].object)
+        self.assertIn("**project**", result.objects[1].object)
+
+    def test_block_global_analysis_renders_stats_table(self):
+        runtime = _build_runtime()
+        fake_stats = {"Rows": 3, "Columns": 2}
+
+        with patch("shapash.report.blocks.perform_global_dataframe_analysis", return_value=fake_stats), patch(
+            "shapash.report.blocks.stats_to_table", return_value=pd.DataFrame({"Prediction dataset": [3]})
+        ):
+            result = runtime.block_global_analysis(title="Global")
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Global", result.objects[0].object)
+        self.assertIsInstance(result.objects[1], pn.pane.DataFrame)
+
+    def test_block_model_analysis_renders_metadata(self):
+        runtime = _build_runtime()
+
+        with patch("shapash.report.blocks.importlib.metadata.version", return_value="9.9.9"):
+            result = runtime.block_model_analysis()
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Model information", result.objects[0].object)
+        self.assertIn("**Model used**", result.objects[1].object)
+
+    def test_block_performance_metrics_builds_badges(self):
+        runtime = _build_runtime()
+
+        result = runtime.block_performance_metrics(
+            title="Perf", metrics=[{"path": f"{__name__}.dummy_metric", "name": "Dummy metric"}]
+        )
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Perf", result.objects[0].object)
+        row = result.objects[1]
+        self.assertIsInstance(row, pn.Row)
+        self.assertIn("Dummy metric", row.objects[0].object)
+
+    def test_block_feature_distribution_uses_feature_label_when_title_is_none(self):
+        runtime = _build_runtime()
+
+        with patch("shapash.report.blocks.plot_distribution", return_value=go.Figure(go.Scatter(x=[1], y=[1]))):
+            result = runtime.block_feature_distribution(feature="age", title=None)
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Age", result.objects[0].object)
+        self.assertIsInstance(result.objects[1], pn.pane.Plotly)
+
+    def test_block_correlations_and_feature_importance_return_plotly_panes(self):
+        runtime = _build_runtime()
+
+        corr_result = runtime.block_correlations_plot(title="Corr")
+        fi_result = runtime.block_feature_importance(title="FI")
+
+        self.assertIsInstance(corr_result.objects[1], pn.pane.Plotly)
+        self.assertIsInstance(fi_result.objects[1], pn.pane.Plotly)
+
+    def test_block_contribution_plot_single_and_all_features(self):
+        runtime = _build_runtime()
+
+        single_result = runtime.block_contribution_plot(feature="age", title=None)
+        all_result = runtime.block_contribution_plot(include_all_features=True, title="All")
+
+        self.assertIsInstance(single_result, pn.Column)
+        self.assertIn("Age", single_result.objects[0].object)
+        self.assertIsInstance(single_result.objects[1], pn.pane.Plotly)
+        self.assertIsInstance(all_result.objects[1], pn.widgets.Select)
+        self.assertEqual(type(all_result.objects[2]).__name__, "ParamFunction")
+
+    def test_block_interactions_plot_default_pair_uses_resolved_labels(self):
+        runtime = _build_runtime()
+
+        with patch(
+            "shapash.report.blocks.compute_sorted_variables_interactions_list_indices", return_value=[(0, 1)]
+        ):
+            result = runtime.block_interactions_plot(title=None)
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Age / Income", result.objects[0].object)
+        self.assertIsInstance(result.objects[1], pn.pane.Plotly)
+
+    def test_block_top_interactions_plot_renders_plotly(self):
+        runtime = _build_runtime()
+
+        result = runtime.block_top_interactions_plot(title="Top interactions", nb_top_interaction=3)
+
+        self.assertIsInstance(result, pn.Column)
+        self.assertIn("Top interactions", result.objects[0].object)
+        self.assertIsInstance(result.objects[1], pn.pane.Plotly)
+
+    def test_block_target_distribution_and_analysis_render(self):
+        runtime = _build_runtime()
+        fake_fig = go.Figure(go.Scatter(x=[1], y=[1]))
+        fake_univariate = {"target": {"count": 3, "na_count": 0}}
+
+        with patch("shapash.report.blocks.plot_distribution", return_value=fake_fig), patch(
+            "shapash.report.blocks.compute_col_types", return_value={"target": "numeric"}
+        ), patch("shapash.report.blocks.perform_univariate_dataframe_analysis", return_value=fake_univariate):
+            dist_result = runtime.block_target_distribution(title=None)
+            analysis_result = runtime.block_target_analysis(title="Target")
+
+        self.assertIsInstance(dist_result.objects[1], pn.pane.Plotly)
+        self.assertIsInstance(analysis_result, pn.Column)
+        self.assertIn("Target", analysis_result.objects[0].object)
+        self.assertIsInstance(analysis_result.objects[2], pn.Row)
+
+    def test_block_confusion_lift_and_univariate_render(self):
+        runtime = _build_runtime()
+        fake_fig = go.Figure(go.Scatter(x=[0, 1], y=[1, 0]))
+        fake_univariate = {
+            "age": {"count": 3, "na_count": 0},
+            "income": {"count": 3, "na_count": 0},
+            "data_train_test": {"count": 6},
+        }
+
+        with patch("shapash.report.blocks.plot_confusion_matrix", return_value=fake_fig), patch(
+            "shapash.report.blocks.plot_lift_curve", return_value=fake_fig
+        ), patch("shapash.report.blocks.compute_col_types", return_value={"age": "numeric", "income": "numeric"}), patch(
+            "shapash.report.blocks.perform_univariate_dataframe_analysis", return_value=fake_univariate
+        ), patch("shapash.report.blocks.plot_distribution", return_value=fake_fig):
+            confusion_result = runtime.block_confusion_matrix(title="CM")
+            lift_result = runtime.block_lift_curve(title="Lift")
+            univariate_result = runtime.block_univariate_analysis()
+
+        self.assertIsInstance(confusion_result.objects[1], pn.pane.Plotly)
+        self.assertIsInstance(lift_result.objects[1], pn.pane.Plotly)
+        self.assertIsNotNone(runtime.explainer.proba_values)
+        self.assertIsInstance(univariate_result.objects[1], pn.widgets.Select)
+        self.assertEqual(type(univariate_result.objects[2]).__name__, "ParamFunction")

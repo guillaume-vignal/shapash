@@ -715,6 +715,44 @@ class ReportBlockMixin:
         return resolved_title, [fig]
 
     @block
+    def block_top_interactions_plot(
+        self,
+        title: str = "Top interactions plot",
+        nb_top_interaction: int = 5,
+        max_points: int | None = None,
+    ) -> BlockContent:
+        """Render a plot for the top feature interaction pairs.
+
+        Parameters
+        ----------
+        title : str, default="Top interactions plot"
+            Section title displayed above the interaction figure.
+        nb_top_interaction : int, default=5
+            Number of top interactions to display.
+        max_points : int or None, default=None
+            Maximum number of points used by the plotting backend.
+
+        Returns
+        -------
+        tuple[str, list[pn.viewable.Viewable]]
+            Section title and top-interactions plot content rendered by the @block decorator.
+
+        Examples
+        --------
+        >>> runtime.block_top_interactions_plot(nb_top_interaction=3)
+        """
+        explainer = self._require_explainer("top_interactions_plot")
+        if max_points is None:
+            effective_max_points = self.max_points
+        else:
+            effective_max_points = max_points
+        fig = explainer.plot.top_interactions_plot(
+            nb_top_interactions=nb_top_interaction,
+            max_points=effective_max_points,
+        )
+        return title, [fig]
+
+    @block
     def block_target_distribution(
         self,
         title: str = "",

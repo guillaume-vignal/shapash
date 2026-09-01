@@ -43,6 +43,11 @@ sections:
           title: "Features contribution plots"
           include_all_features: true
 
+      - type: top_interactions_plot
+        params:
+          title: "Top interactions plot"
+          nb_top_interaction: 5
+
       - type: residual_error_summary
         params:
           title: "Residual error summary"
