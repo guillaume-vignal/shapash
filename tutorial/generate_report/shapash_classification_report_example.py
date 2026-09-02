@@ -184,11 +184,9 @@ if __name__ == "__main__":
         )
     else:
         output_file = os.path.join(cur_dir, "output", "classification_report.html")
-        report_config_file = os.path.join(cur_dir, "config", "default_report_classification_titanic.yml")
         xpl.generate_report(
             output_file=output_file,
             x_train=xtrain,
             y_train=ytrain,
             y_test=ytest,
-            yaml_path=report_config_file,
         )
