@@ -206,7 +206,8 @@ class LimeBackend(BaseBackend):
               - regression: shape (n_samples,)
         """
         lime_contrib = []
-        base_values = []
+        base_values_cls: list[list[float]] = []
+        base_values_reg: list[float] = []
         for i in x.index:
             exp = self.explainer.explain_instance(
                 x.loc[i].to_numpy(),
@@ -218,14 +219,14 @@ class LimeBackend(BaseBackend):
                 # Binary classification contributions are expanded later as [-contrib, +contrib].
                 # Keep base values coherent with this convention.
                 pos_intercept = self._extract_intercept(exp, class_idx=1)
-                base_values.append([-pos_intercept, pos_intercept])
+                base_values_cls.append([-pos_intercept, pos_intercept])
             else:
-                base_values.append(self._extract_intercept(exp, class_idx=0))
+                base_values_reg.append(self._extract_intercept(exp, class_idx=0))
 
         contrib_df = pd.DataFrame(lime_contrib, index=x.index)[feature_names]
         if self._case == "classification":
-            base_values_df = pd.DataFrame(base_values, index=x.index, columns=list(range(num_classes or 2)))
+            base_values_df = pd.DataFrame(base_values_cls, index=x.index, columns=list(range(num_classes or 2)))
             return contrib_df, base_values_df.to_numpy(dtype=float)
 
-        base_values_series = pd.Series(base_values, index=x.index)
+        base_values_series = pd.Series(base_values_reg, index=x.index)
         return contrib_df, base_values_series.to_numpy(dtype=float)

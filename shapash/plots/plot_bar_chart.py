@@ -100,7 +100,7 @@ def plot_bar_chart(
 
         def _suffix_duplicate_labels(labels: list[str]) -> list[str]:
             counts = Counter(labels)
-            current_count = Counter()
+            current_count: Counter[str] = Counter()
             output = []
             for label in labels:
                 if counts[label] > 1:
