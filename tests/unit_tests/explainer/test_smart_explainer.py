@@ -314,6 +314,62 @@ class TestSmartExplainer(unittest.TestCase):
         xpl.compile(x=df[["x1", "x2"]], additional_data=df[["x3"]])
         assert len(xpl.additional_features_dict) == 1
 
+    def test_compile_7_with_explain_data_dict(self):
+        """
+        Unit test compile 7
+        checking compile method with explain_data-like dict
+        """
+        np.random.seed(1)
+        df = pd.DataFrame(range(0, 8), columns=["id"])
+        df["y"] = df["id"] % 2
+        df["x1"] = np.random.randint(1, 10, df.shape[0])
+        df["x2"] = np.random.randint(1, 4, df.shape[0])
+        df = df.set_index("id")
+
+        clf = RandomForestClassifier(n_estimators=5, random_state=1).fit(df[["x1", "x2"]], df["y"])
+
+        raw_contrib = pd.DataFrame(
+            np.random.normal(0, 0.1, size=(df.shape[0], 2)),
+            columns=["x1", "x2"],
+            index=df.index,
+        )
+        base_values = np.column_stack(
+            [np.full(df.shape[0], -0.2, dtype=float), np.full(df.shape[0], 0.2, dtype=float)]
+        )
+
+        explain_data = {"contributions": raw_contrib, "base_values": base_values}
+
+        xpl = SmartExplainer(clf)
+        xpl.compile(x=df[["x1", "x2"]], contributions=explain_data)
+
+        assert isinstance(xpl.explain_data, dict)
+        assert "base_values" in xpl.explain_data
+        assert np.array_equal(xpl.explain_data["base_values"], base_values)
+        assert isinstance(xpl.contributions, list)
+        assert len(xpl.contributions) == 2
+
+    def test_to_pandas_does_not_persist_filter_params(self):
+        """
+        Unit test to_pandas filtering is temporary and does not alter global mask_params.
+        """
+        np.random.seed(1)
+        df = pd.DataFrame(range(0, 12), columns=["id"])
+        df["y"] = (df["id"] % 2).astype(int)
+        df["x1"] = np.random.randint(1, 123, df.shape[0])
+        df["x2"] = np.random.randint(1, 3, df.shape[0])
+        df = df.set_index("id")
+
+        clf = cb.CatBoostClassifier(n_estimators=2).fit(df[["x1", "x2"]], df["y"])
+        xpl = SmartExplainer(clf)
+        xpl.compile(x=df[["x1", "x2"]])
+
+        xpl.filter(positive=None, max_contrib=2)
+        previous_mask_params = xpl.mask_params.copy()
+
+        _ = xpl.to_pandas(positive=True, max_contrib=2)
+
+        assert xpl.mask_params == previous_mask_params
+
     def test_filter_0(self):
         """
         Unit test filter 0
