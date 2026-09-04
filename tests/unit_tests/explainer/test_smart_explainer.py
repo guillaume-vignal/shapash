@@ -25,6 +25,7 @@ from shapash.backend import ShapBackend
 from shapash.explainer.multi_decorator import MultiDecorator
 from shapash.explainer.smart_state import SmartState
 from shapash.utils.check import check_model
+from shapash.report.blocks import ReportBlockMixin
 
 
 def init_sme_to_pickle_test():
@@ -1110,9 +1111,8 @@ class TestSmartExplainer(unittest.TestCase):
         xpl.run_app()
         assert xpl.y_target is not None
 
-    @patch("shapash.report.generation.export_and_save_report")
-    @patch("shapash.report.generation.execute_report")
-    def test_generate_report(self, mock_execute_report, mock_export_and_save_report):
+    @patch("shapash.explainer.smart_explainer.generate_smart_report")
+    def test_generate_report(self, mock_generate_report):
         """
         Test generate report method
         """
@@ -1124,9 +1124,41 @@ class TestSmartExplainer(unittest.TestCase):
         clf = cb.CatBoostClassifier(n_estimators=1).fit(df[["x1", "x2"]], df["y"])
         xpl = SmartExplainer(clf)
         xpl.compile(x=df[["x1", "x2"]])
-        xpl.generate_report(output_file="test", project_info_file="test")
-        mock_execute_report.assert_called_once()
-        mock_export_and_save_report.assert_called_once()
+        xpl.generate_report(output_file="test")
+        runtime_arg = mock_generate_report.call_args.kwargs["runtime"]
+        assert runtime_arg.explainer is xpl
+        mock_generate_report.assert_called_once_with(
+            runtime=runtime_arg,
+            config_file=unittest.mock.ANY,
+            output_file="test",
+        )
+
+    @patch("shapash.explainer.smart_explainer.generate_smart_report")
+    def test_generate_report_with_user_block_instance(self, mock_generate_report):
+        """Custom block runtime provided by user must be passed through unchanged."""
+        df = pd.DataFrame(range(0, 21), columns=["id"])
+        df["y"] = df["id"].apply(lambda x: 1 if x < 10 else 0)
+        df["x1"] = np.random.randint(1, 123, df.shape[0])
+        df["x2"] = np.random.randint(1, 3, df.shape[0])
+        df = df.set_index("id")
+        clf = cb.CatBoostClassifier(n_estimators=1).fit(df[["x1", "x2"]], df["y"])
+        xpl = SmartExplainer(clf)
+        xpl.compile(x=df[["x1", "x2"]])
+
+        class _UserRuntime(ReportBlockMixin):
+            def __init__(self):
+                super().__init__()
+                self.user_initialized = True
+
+            def render_block(self, block_cfg):
+                return None
+
+        block_instance = _UserRuntime()
+        xpl.generate_report(output_file="test", block_instance=block_instance)
+
+        runtime_arg = mock_generate_report.call_args.kwargs["runtime"]
+        assert runtime_arg is block_instance
+        assert runtime_arg.user_initialized is True
 
     def test_compute_features_stability_1(self):
         df = pd.DataFrame(np.random.randint(1, 100, size=(15, 4)), columns=list("ABCD"))
