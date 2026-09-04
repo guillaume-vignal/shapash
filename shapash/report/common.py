@@ -1,12 +1,45 @@
 import builtins
 import os
+import shutil
 from collections.abc import Callable
 from enum import Enum
 from importlib import import_module
 from numbers import Number
 
 import pandas as pd
-from pandas.api.types import is_bool_dtype, is_numeric_dtype, is_string_dtype
+from pandas.api.types import is_bool_dtype, is_numeric_dtype
+
+from shapash.utils.dtypes import is_text_like
+
+
+class ReportTemplate(Enum):
+    """Report templates list"""
+
+    DEFAULT_REGRESSION = "default_regression_report.yml"
+    DEFAULT_CLASSIFICATION = "default_classification_report.yml"
+
+    # Other templates could be available
+    # MINI = "mini_report.yml"
+    # FULL = "full_report.yml"
+    # ...
+
+    def __str__(self):
+        return str(self.value)
+
+
+def export_report_yml(template_id: ReportTemplate | str, output_path: str = "."):
+    """
+    Export a report template YAML file to the given output path.
+
+    Parameters
+    ----------
+    template_id : ReportTemplate
+        Identifier of the report template to export.
+    output_path : str, default="."
+        Destination directory or file path where the template is copied.
+    """
+    template_file_path = os.path.join(os.path.dirname(__file__), "assets", str(template_id))
+    shutil.copy(template_file_path, output_path)
 
 
 class VarType(Enum):
@@ -40,9 +73,7 @@ def series_dtype(s: pd.Series, cat_num_threshold: int = 15) -> VarType:
     """
     if is_bool_dtype(s):
         return VarType.TYPE_CAT
-    elif is_string_dtype(s):
-        return VarType.TYPE_CAT
-    elif s.dtype.name == "object":
+    elif is_text_like(s, strict_object=True):
         return VarType.TYPE_CAT
     elif is_numeric_dtype(s):
         if numeric_is_continuous(s, threshold=cat_num_threshold):
