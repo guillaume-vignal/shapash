@@ -4,8 +4,7 @@ Smart explainer module
 
 import copy
 import logging
-import shutil
-import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,7 +16,6 @@ from shapash.backend import BaseBackend, get_backend_cls_from_name
 from shapash.backend.shap_backend import get_shap_interaction_values
 from shapash.manipulation.select_lines import keep_right_contributions
 from shapash.manipulation.summarize import create_grouped_features_values
-from shapash.report import check_report_requirements
 from shapash.style.style_utils import colors_loading, select_palette
 from shapash.utils.check import (
     check_additional_data,
@@ -35,6 +33,14 @@ from shapash.utils.model import predict, predict_error, predict_proba
 from shapash.utils.transform import apply_postprocessing, handle_categorical_missing, inverse_transform
 from shapash.utils.utils import get_host_name
 from shapash.webapp.smart_app import SmartApp
+
+try:
+    from shapash.report import ReportTemplate
+    from shapash.report.blocks import ReportBlockMixin
+    from shapash.report.core import generate_report as generate_smart_report
+except ImportError:
+    # [report] optional dependencies may not be installed
+    ...
 
 from .smart_plotter import SmartPlotter
 
@@ -1654,39 +1660,28 @@ class SmartExplainer:
 
     def generate_report(
         self,
-        output_file,
-        project_info_file,
-        x_train=None,
-        y_train=None,
-        y_test=None,
-        title_story=None,
-        title_description=None,
-        metrics=None,
-        working_dir=None,
-        notebook_path=None,
-        kernel_name=None,
-        max_points=200,
-        display_interaction_plot=False,
-        nb_top_interactions=5,
-    ):
+        output_file: str,
+        x_train: pd.DataFrame | None = None,
+        y_train: pd.Series | pd.DataFrame | list | None = None,
+        y_test: pd.Series | pd.DataFrame | list | None = None,
+        yaml_path: str | Path | None = None,
+        max_points: int = 200,
+        block_instance: ReportBlockMixin | None = None,
+    ) -> None:
         """
         Generate an interactive HTML report summarizing the model and its explainability.
 
         This method produces a comprehensive HTML report containing visual and textual
-        insights about the project, dataset, and model performance.
-        It leverages a predefined or custom Jupyter notebook template to analyze
-        the model, generate plots, compute metrics, and export the final report.
+        insights about the project, dataset, and model performance using the
+        smart_report block-based HTML renderer.
 
-        A project information YAML file is required to describe key project details
-        (e.g., model name, author, date, context).
+        A report configuration is provided through a YAML file. If no YAML file is
+        specified, a default configuration is generated automatically.
 
         Parameters
         ----------
         output_file : str
             Path to the output HTML file where the report will be saved.
-        project_info_file : str
-            Path to a YAML file containing project metadata to be displayed in the report
-            (e.g., project name, author, date, description).
         x_train : pandas.DataFrame, optional
             Training dataset used to fit the model.
             Used for generating feature summaries and training-related analyses.
@@ -1694,34 +1689,15 @@ class SmartExplainer:
             Target values corresponding to `x_train`.
         y_test : pandas.Series or pandas.DataFrame, optional
             Target values for the test dataset.
-        title_story : str, optional
-            Title displayed at the top of the report.
-        title_description : str, optional
-            Short descriptive text displayed below the main title.
-        metrics : list of dict, optional
-            List of metrics to compute and display in the performance section.
-            Each dictionary should include:
-            - `'path'`: str — import path to the metric function (e.g., `"sklearn.metrics.f1_score"`)
-            - `'name'`: str, optional — display name for the metric
-            - `'use_proba_values'`: bool, optional — if True, use predicted probabilities instead of labels
-            Example:
-            `metrics=[{'name': 'F1 score', 'path': 'sklearn.metrics.f1_score'}]`
-        working_dir : str, optional
-            Directory used to temporarily store generated files (e.g., notebook, outputs).
-            If `None`, a temporary directory is automatically created and deleted after report generation.
-        notebook_path : str, optional
-            Path to a custom notebook used as a template for generating the report.
-            If `None`, the default Shapash report notebook is used.
-        kernel_name : str, optional
-            Name of the Jupyter kernel to use for report execution.
-            Useful when multiple kernels are available and the default one is incorrect.
+        yaml_path : str, optional
+            Path to a custom YAML configuration file used to generate the report.
+            If `None`, a default YAML configuration is generated.
         max_points : int, optional, default=200
             Maximum number of points displayed in contribution plots.
-        display_interaction_plot : bool, optional, default=False
-            If True, includes interaction plots in the report.
-            (Note: this can increase computation time.)
-        nb_top_interactions : int, optional, default=5
-            Number of top feature interactions to include in the report.
+        block_instance : object, optional
+            Optional custom block runtime used to resolve block methods during report generation.
+            The instance must already be fully initialized by the user and should implement
+            methods named `block_<type>` for YAML block entries.
 
         Returns
         -------
@@ -1737,7 +1713,7 @@ class SmartExplainer:
 
         Notes
         -----
-        - The method internally executes a notebook that generates the report content.
+        - The method renders the report from block definitions in a YAML configuration.
         - Temporary files are automatically cleaned up unless a custom `working_dir` is provided.
         - Interaction plots can be disabled to optimize runtime performance.
 
@@ -1745,69 +1721,60 @@ class SmartExplainer:
         -------
         >>> xpl.generate_report(
         ...     output_file="report.html",
-        ...     project_info_file="utils/project_info.yml",
         ...     x_train=x_train,
         ...     y_train=y_train,
         ...     y_test=y_test,
-        ...     title_story="House Prices Project Report",
-        ...     title_description="Comprehensive interpretability analysis for the Kaggle house prices dataset.",
-        ...     metrics=[
-        ...         {"path": "sklearn.metrics.mean_squared_error", "name": "Mean Squared Error"},
-        ...         {"path": "sklearn.metrics.mean_absolute_error", "name": "Mean Absolute Error"},
-        ...     ],
         ...     display_interaction_plot=True,
         ...     nb_top_interactions=5,
         ... )
         """
-        check_report_requirements()
-        if x_train is not None:
-            x_train = handle_categorical_missing(x_train)
-        # Avoid Import Errors with requirements specific to the Shapash Report
-        from shapash.report.generation import execute_report, export_and_save_report  # noqa: PLC0415
 
-        rm_working_dir = False
-        if not working_dir:
-            working_dir = tempfile.mkdtemp()
-            rm_working_dir = True
-
+        # input checks
         if not hasattr(self, "model"):
             raise AssertionError(
                 "Explainer object was not compiled. Please compile the explainer "
                 "object using .compile(...) method before generating the report."
             )
 
-        try:
-            execute_report(
-                working_dir=working_dir,
+        if block_instance is not None:
+            if (x_train is not None) and (block_instance.x_train_init is not x_train):
+                logging.warning("block_instance's x_train is different from provided x_train. Latter is ignored.")
+            if (y_train is not None) and (block_instance.y_train is not y_train):
+                logging.warning("block_instance's y_train is different from provided y_train. Latter is ignored.")
+            if (y_test is not None) and (block_instance.y_test is not y_test):
+                logging.warning("block_instance's y_test is different from provided y_test. Latter is ignored.")
+            if max_points != block_instance.max_points:
+                logging.warning("block_instance's max_points is different from provided max_points. Latter is ignored.")
+
+            report_runtime = block_instance
+
+        else:
+            if x_train is not None:
+                x_train = handle_categorical_missing(x_train)
+
+            report_runtime = ReportBlockMixin(
                 explainer=self,
-                project_info_file=project_info_file,
                 x_train=x_train,
                 y_train=y_train,
                 y_test=y_test,
-                config={
-                    k: v
-                    for k, v in dict(
-                        title_story=title_story,
-                        title_description=title_description,
-                        metrics=metrics,
-                        max_points=max_points,
-                        display_interaction_plot=display_interaction_plot,
-                        nb_top_interactions=nb_top_interactions,
-                    ).items()
-                    if v is not None
-                },
-                notebook_path=notebook_path,
-                kernel_name=kernel_name,
+                max_points=max_points,
             )
-            export_and_save_report(working_dir=working_dir, output_file=output_file)
+        if self._case == "classification":
+            default_report = ReportTemplate.DEFAULT_CLASSIFICATION
+        else:
+            default_report = ReportTemplate.DEFAULT_REGRESSION
 
-            if rm_working_dir:
-                shutil.rmtree(working_dir)
+        config_file = (
+            Path(yaml_path)
+            if yaml_path is not None
+            else Path(__file__).resolve().parent.parent / "report" / "assets" / str(default_report)
+        )
 
-        except Exception as e:
-            if rm_working_dir:
-                shutil.rmtree(working_dir)
-            raise e
+        generate_smart_report(
+            runtime=report_runtime,
+            config_file=config_file,
+            output_file=output_file,
+        )
 
     def _local_pred(self, index, label=None):
         """
