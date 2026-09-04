@@ -1666,8 +1666,6 @@ class SmartExplainer:
         y_test: pd.Series | pd.DataFrame | list | None = None,
         yaml_path: str | Path | None = None,
         max_points: int = 200,
-        display_interaction_plot: bool = False,
-        nb_top_interactions: int = 5,
         block_instance: ReportBlockMixin | None = None,
     ) -> None:
         """
@@ -1696,11 +1694,6 @@ class SmartExplainer:
             If `None`, a default YAML configuration is generated.
         max_points : int, optional, default=200
             Maximum number of points displayed in contribution plots.
-        display_interaction_plot : bool, optional, default=False
-            If True, includes interaction plots in the report.
-            (Note: this can increase computation time.)
-        nb_top_interactions : int, optional, default=5
-            Number of top feature interactions to include in the report.
         block_instance : object, optional
             Optional custom block runtime used to resolve block methods during report generation.
             The instance must already be fully initialized by the user and should implement
