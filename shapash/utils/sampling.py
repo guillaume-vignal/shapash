@@ -82,8 +82,7 @@ def _no_selection_sampling(
         selected_indices = random.sample(df.index.tolist(), max_points)
         return selected_indices, "Length of random Subset: "
     else:
-        selected_indices = _intelligent_sampling(df, max_points, col, col_value_count, random_seed)
-        return selected_indices, "Length of smart Subset: "
+        return _intelligent_sampling(df, max_points, col, col_value_count, random_seed), "Length of smart Subset: "
 
 
 def _list_selection_sampling(
@@ -104,8 +103,10 @@ def _list_selection_sampling(
         return selected_indices, "Length of random Subset: "
     else:
         subset = df.loc[selection]
-        selected_indices = _intelligent_sampling(subset, max_points, col, col_value_count, random_seed)
-        return selected_indices, "Length of smart Subset: "
+        return (
+            _intelligent_sampling(subset, max_points, col, col_value_count, random_seed),
+            "Length of smart Subset: ",
+        )
 
 
 def _intelligent_sampling(
