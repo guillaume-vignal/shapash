@@ -675,7 +675,7 @@ class ReportBlockMixin:
         self,
         title: str = "Top interactions plot",
         nb_top_interaction: int = 5,
-        label: int | str = -1,
+        class_label: int | str = -1,
         max_points: int | None = None,
     ) -> BlockContent:
         """Render a plot for the top feature interaction pairs.
@@ -686,7 +686,7 @@ class ReportBlockMixin:
             Section title displayed above the interaction figure.
         nb_top_interaction : int, default=5
             Number of top interactions to display.
-        label : int or str, default=-1
+        class_label : int or str, default=-1
             Optional class/target label used to compute and render class-specific interactions.
         max_points : int or None, default=None
             Maximum number of points used by the plotting backend.
@@ -707,7 +707,7 @@ class ReportBlockMixin:
             effective_max_points = max_points
         fig = explainer.plot.top_interactions_plot(
             nb_top_interactions=nb_top_interaction,
-            label=label,
+            label=class_label,
             max_points=effective_max_points,
         )
         return title, [fig]
