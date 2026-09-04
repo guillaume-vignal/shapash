@@ -44,7 +44,10 @@ def generate_report(runtime, config_file: Path, output_file: str) -> None:
         sizing_mode="stretch_width",
     )
     report_layout.append(pn.pane.HTML(f"<script>{report_js_text()}</script>", sizing_mode="stretch_width"))
-    report_layout.save(str(out_path), embed=True)
+
+    with open(str(out_path), mode="w", encoding="utf-8") as f:
+        report_layout.save(f, embed=True)
+
     logger.info("Report saved → %s", output_file)
 
 
