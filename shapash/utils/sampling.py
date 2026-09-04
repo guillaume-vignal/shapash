@@ -1,11 +1,18 @@
 import random
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
 
-def subset_sampling(df, selection=None, max_points=2000, col=None, col_value_count=0):
+def subset_sampling(
+    df: pd.DataFrame,
+    selection: list[Any] | None = None,
+    max_points: int = 2000,
+    col: str | tuple[str, str] | list[str] | None = None,
+    col_value_count: int = 0,
+) -> tuple[list[Any] | np.ndarray, str | None]:
     """
     Samples a subset of indices for plotting, optionally creating a note for the plot subtitle.
 
@@ -40,7 +47,14 @@ def subset_sampling(df, selection=None, max_points=2000, col=None, col_value_cou
     return selected_indices, additional_note
 
 
-def _determine_sampling_strategy(df, selection, max_points, col, col_value_count, random_seed):
+def _determine_sampling_strategy(
+    df: pd.DataFrame,
+    selection: list[Any] | None,
+    max_points: int,
+    col: str | tuple[str, str] | list[str] | None,
+    col_value_count: int,
+    random_seed: int,
+) -> tuple[list[Any] | np.ndarray, str | None]:
     """
     Determines the sampling strategy based on the input parameters.
     """
@@ -52,7 +66,13 @@ def _determine_sampling_strategy(df, selection, max_points, col, col_value_count
         raise ValueError("Parameter 'selection' must be a list.")
 
 
-def _no_selection_sampling(df, max_points, col, col_value_count, random_seed):
+def _no_selection_sampling(
+    df: pd.DataFrame,
+    max_points: int,
+    col: str | tuple[str, str] | list[str] | None,
+    col_value_count: int,
+    random_seed: int,
+) -> tuple[list[Any] | np.ndarray, str | None]:
     """
     Handles sampling when no specific selection is made.
     """
@@ -66,7 +86,14 @@ def _no_selection_sampling(df, max_points, col, col_value_count, random_seed):
         return selected_indices, "Length of smart Subset: "
 
 
-def _list_selection_sampling(df, selection, max_points, col, col_value_count, random_seed):
+def _list_selection_sampling(
+    df: pd.DataFrame,
+    selection: list[Any],
+    max_points: int,
+    col: str | tuple[str, str] | list[str] | None,
+    col_value_count: int,
+    random_seed: int,
+) -> tuple[list[Any] | np.ndarray, str | None]:
     """
     Handles sampling when a specific list of indices is provided.
     """
@@ -81,7 +108,13 @@ def _list_selection_sampling(df, selection, max_points, col, col_value_count, ra
         return selected_indices, "Length of smart Subset: "
 
 
-def _intelligent_sampling(data, max_points, col, col_value_count, random_seed):
+def _intelligent_sampling(
+    data: pd.DataFrame,
+    max_points: int,
+    col: str | tuple[str, str] | list[str] | None,
+    col_value_count: int,
+    random_seed: int,
+) -> list[Any] | np.ndarray:
     """
     Performs intelligent sampling based on the distribution of values in the specified column.
     """
@@ -114,7 +147,13 @@ def _intelligent_sampling(data, max_points, col, col_value_count, random_seed):
     return selected_indices
 
 
-def _intelligent_sampling_pair(data, max_points, col, random_seed, rng):
+def _intelligent_sampling_pair(
+    data: pd.DataFrame,
+    max_points: int,
+    col: tuple[str, str] | list[str],
+    random_seed: int,
+    rng: np.random.Generator,
+) -> list[Any] | np.ndarray:
     """
     Performs intelligent sampling on a crossed pair of variables.
 
@@ -150,20 +189,20 @@ def _intelligent_sampling_pair(data, max_points, col, random_seed, rng):
     return selected_indices
 
 
-def _build_joint_labels(series1, series2):
+def _build_joint_labels(series1: pd.Series, series2: pd.Series) -> pd.Series:
     left = series1.astype(object).where(~series1.isna(), "missing")
     right = series2.astype(object).where(~series2.isna(), "missing")
     return left.astype(str) + "||" + right.astype(str)
 
 
-def _is_numeric_like(series):
+def _is_numeric_like(series: pd.Series) -> bool:
     if series.dtype.kind in "biufc":
         return True
     coerced = pd.to_numeric(series, errors="coerce")
     return coerced.notna().all()
 
 
-def _format_additional_note(df, selected_indices, additional_note):
+def _format_additional_note(df: pd.DataFrame, selected_indices: list[Any] | np.ndarray, additional_note: str) -> str:
     """
     Formats the additional note with the length and percentage of the selected subset.
     """
