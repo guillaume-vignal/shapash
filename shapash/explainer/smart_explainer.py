@@ -2,10 +2,12 @@
 Smart explainer module
 """
 
+from __future__ import annotations
+
 import copy
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -21,15 +23,34 @@ from shapash.utils.utils import get_host_name
 from shapash.webapp.smart_app import SmartApp
 
 from .explainer import Explainer
+from .smart_plotter import SmartPlotter
+
+if TYPE_CHECKING:
+    from shapash.report.blocks import ReportBlockMixin
+
+REPORT_DEPENDENCIES_AVAILABLE = False
+ReportTemplate: Any | None = None
+_ReportBlockMixin: type[Any] | None = None
+
+
+def _generate_smart_report_unavailable(*args: Any, **kwargs: Any) -> None:
+    raise ImportError("Report dependencies are not installed. Please install shapash report extras.")
+
+
+generate_smart_report = _generate_smart_report_unavailable
+
 
 try:
-    from shapash.report import ReportTemplate
-    from shapash.report.blocks import ReportBlockMixin
-    from shapash.report.core import generate_report as generate_smart_report
+    from shapash.report import ReportTemplate as _ReportTemplate
+    from shapash.report.blocks import ReportBlockMixin as _ReportBlockMixin
+    from shapash.report.core import generate_report as _generate_smart_report
 except ImportError:
     # [report] optional dependencies may not be installed
     ...
-from .smart_plotter import SmartPlotter
+else:
+    REPORT_DEPENDENCIES_AVAILABLE = True
+    ReportTemplate = _ReportTemplate
+    generate_smart_report = _generate_smart_report
 
 logging.basicConfig(level=logging.INFO)
 
@@ -527,7 +548,7 @@ class SmartExplainer:
         save_pickle(self, path)
 
     @classmethod
-    def load(cls, path: str) -> "SmartExplainer":
+    def load(cls, path: str) -> SmartExplainer:
         """
         Load a previously saved SmartExplainer object from a pickle file.
 
@@ -993,6 +1014,11 @@ class SmartExplainer:
                 "object using .compile(...) method before generating the report."
             )
 
+        report_template = ReportTemplate
+        report_block_cls = _ReportBlockMixin
+        if (not REPORT_DEPENDENCIES_AVAILABLE) or report_template is None or report_block_cls is None:
+            raise ImportError("Report dependencies are not installed. Please install shapash report extras.")
+
         if block_instance is not None:
             if (x_train is not None) and (block_instance.x_train_init is not x_train):
                 logging.warning("block_instance's x_train is different from provided x_train. Latter is ignored.")
@@ -1009,17 +1035,17 @@ class SmartExplainer:
             if x_train is not None:
                 x_train = handle_categorical_missing(x_train)
 
-            report_runtime = ReportBlockMixin(
-                explainer=self,
+            report_runtime = report_block_cls(
+                explainer=self.explainer,
                 x_train=x_train,
                 y_train=y_train,
                 y_test=y_test,
                 max_points=max_points,
             )
-        if self._case == "classification":
-            default_report = ReportTemplate.DEFAULT_CLASSIFICATION
+        if self.explainer._case == "classification":
+            default_report = report_template.DEFAULT_CLASSIFICATION
         else:
-            default_report = ReportTemplate.DEFAULT_REGRESSION
+            default_report = report_template.DEFAULT_REGRESSION
 
         config_file = (
             Path(yaml_path)
@@ -1066,16 +1092,16 @@ class SmartExplainer:
         >>> xpl._local_pred(index=12)
         0.7421
         """
-        if self._case == "classification":
-            if self.proba_values is not None:
-                value = self.proba_values.iloc[:, [label]].loc[index].values[0]
+        if self.explainer._case == "classification":
+            if self.explainer.proba_values is not None:
+                value = self.explainer.proba_values.iloc[:, [label]].loc[index].values[0]
             else:
                 value = None
-        elif self._case == "regression":
-            if self.y_pred is not None:
-                value = self.y_pred.loc[index]
+        elif self.explainer._case == "regression":
+            if self.explainer.y_pred is not None:
+                value = self.explainer.y_pred.loc[index]
             else:
-                value = self.model.predict(self.x_encoded.loc[[index]])[0]
+                value = self.explainer.model.predict(self.explainer.x_encoded.loc[[index]])[0]
 
         if isinstance(value, pd.Series):
             value = value.values[0]
