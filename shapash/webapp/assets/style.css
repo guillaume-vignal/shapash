@@ -130,6 +130,16 @@ h4 {
 
 /*   EXPAND      */
 
+.clusters-settings-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    display: flex;
+    padding: 2px;
+    background-color: white;
+}
+
 .dock-expand {
     width: 2vw;
     height: 2vw;

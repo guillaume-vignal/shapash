@@ -507,7 +507,7 @@ class SmartApp:
 
         # Component for the graph prediction picking
         self.components["graph"]["prediction_picking"] = MyGraph(figure=go.Figure(), component_id="prediction_picking")
-        self.components["graph"]["clusters"] = MyGraph(figure=go.Figure(), component_id="clusters")
+        self.components["graph"]["clusters"] = MyGraph(figure=go.Figure(), component_id="clusters", responsive=True)
 
         self.components["graph"]["detail_feature"] = MyGraph(figure=go.Figure(), component_id="detail_feature")
 
@@ -839,6 +839,11 @@ class SmartApp:
 
     def make_skeleton(self) -> None:
         """Describe the app skeleton (bootstrap grid) and initialize components containers."""
+        cluster_settings_accessibility: dict[str, Any] = {
+            "aria-label": "Hide cluster settings",
+            "aria-controls": "clusters_settings",
+            "aria-expanded": "true",
+        }
         self.skeleton["navbar"] = dbc.Container(
             [
                 dbc.Row(
@@ -1121,6 +1126,19 @@ class SmartApp:
                                                             dbc.Col(
                                                                 html.Div(
                                                                     [
+                                                                        html.Button(
+                                                                            html.I(
+                                                                                "chevron_right",
+                                                                                id="clusters_settings_icon",
+                                                                                className="material-icons",
+                                                                            ),
+                                                                            id="toggle_clusters_settings",
+                                                                            type="button",
+                                                                            n_clicks=0,
+                                                                            className="btn btn-outline-warning clusters-settings-toggle",
+                                                                            title="Hide cluster settings",
+                                                                            **cluster_settings_accessibility,
+                                                                        ),
                                                                         html.Div(
                                                                             [
                                                                                 *self.draw_component(
@@ -1139,6 +1157,7 @@ class SmartApp:
                                                                         "height": "100%",
                                                                     },
                                                                 ),
+                                                                id="clusters_graph_column",
                                                                 width=9,
                                                                 style={"height": "100%"},
                                                             ),
@@ -1339,6 +1358,7 @@ class SmartApp:
                                                                         "backgroundColor": "white",
                                                                     },
                                                                 ),
+                                                                id="clusters_settings",
                                                                 width=3,
                                                                 style={"height": "100%"},
                                                             ),
@@ -3423,6 +3443,28 @@ class SmartApp:
                 else:
                     new_element = html.Div()
                 return new_element
+
+        @app.callback(
+            Output("clusters_settings", "style"),
+            Output("clusters_graph_column", "width"),
+            Output("clusters_settings_icon", "children"),
+            Output("toggle_clusters_settings", "title"),
+            Output("toggle_clusters_settings", "aria-label"),
+            Output("toggle_clusters_settings", "aria-expanded"),
+            Input("toggle_clusters_settings", "n_clicks"),
+        )
+        def toggle_clusters_settings(n_clicks: int | None) -> tuple[dict[str, str], int, str, str, str, str]:
+            """Hide the cluster controls without unmounting them or changing the plot."""
+            collapsed = bool(n_clicks and n_clicks % 2)
+            label = "Show cluster settings" if collapsed else "Hide cluster settings"
+            return (
+                {"display": "none"} if collapsed else {"height": "100%"},
+                12 if collapsed else 9,
+                "chevron_left" if collapsed else "chevron_right",
+                label,
+                label,
+                "false" if collapsed else "true",
+            )
 
         @app.callback(
             Output("n_clusters_label", "children"),
