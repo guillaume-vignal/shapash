@@ -91,6 +91,13 @@ must align with ``x``; classification baseline DataFrame columns must match
 them, ordinary bar plots remain available, but waterfall plots raise an explicit
 error rather than inventing a baseline.
 
+For classification contributions already on the probability scale, include
+``"output_space": "probability"`` in the contributions dictionary. The waterfall
+then displays cumulative values directly, without softmax. Intermediate sums
+are not necessarily valid probabilities. When the output space is omitted, the
+existing waterfall behavior applies softmax to class scores; its probability
+interpretation is appropriate only when those scores are compatible logits.
+
 Plots, filtering, grouped summaries, ``to_pandas``, the WebApp, and
 ``SmartExplainer.save`` / ``load`` are available for the supplied dataset.
 New predictions, stability analysis, interaction computation, model reports and
@@ -153,6 +160,16 @@ For example, LIME requires ``probability=True`` for ``NuSVC``,
 ``loss="log_loss"`` for ``SGDClassifier``, and ``voting="soft"`` for
 ``VotingClassifier``. LIME explanations are local approximations, not exact
 additive reconstructions of the model output.
+For binary LIME, the class-0 local intercept is the complement of the class-1
+intercept. Classification LIME explains probabilities, so its waterfall does not
+apply softmax to its weights. The waterfall shows the baseline plus the
+displayed local-surrogate weights, not the model prediction; masking features
+also changes the displayed sum. With continuous-feature discretization disabled,
+the weights are coefficients on scaled inputs, so even their full sum is not
+necessarily the surrogate's prediction. The model probability, when available,
+is shown separately in the plot subtitle.
+Recompute previously saved binary LIME explanations to replace their old
+class-0 baseline.
 
 LIME categorical features and encoded groups
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -207,6 +224,45 @@ cross-feature constraints or correlations. Reusing the same categorical source
 in multiple ``ColumnTransformer`` branches is rejected rather than sampling
 inconsistent representations. Unsupported preprocessing metadata and ambiguous
 feature mappings also raise errors rather than guessing.
+
+LIME sampling and discretization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The tabular LIME backend exposes optional LIME parameters directly on
+``SmartExplainer``. For example:
+
+.. code-block:: python
+
+    xpl = SmartExplainer(
+        model=model,
+        preprocessing=encoder,
+        backend="lime",
+        categorical_features=["city", "segment"],
+        random_state=42,
+        num_samples=2000,
+        kernel_width=1.5,
+        discretize_continuous=True,
+        discretizer="decile",
+    )
+    xpl.compile(x=x_encoded)
+
+``random_state`` controls LIME's random generator; an integer seed makes newly
+constructed explainers reproducible for the same data and call order.
+``num_samples`` is the number of perturbations per observation, and
+``kernel_width`` controls locality. ``discretize_continuous`` controls whether
+continuous inputs are discretized; ``discretizer`` selects LIME's discretizer,
+for example ``"quartile"`` or ``"decile"``. Disabling discretization changes
+the meaning of continuous-feature weights: they are coefficients on LIME's
+scaled continuous inputs, rather than weights for the observation's interval.
+
+Omitted options retain LIME's own defaults: no fixed random seed, 5,000 samples,
+a kernel width derived from the number of features, and quartile discretization.
+Changing these settings changes the approximation and potentially its runtime.
+The backend retains them when exported or pickled; a rebuilt explainer starts
+from the supplied integer seed rather than continuing the previous random sequence.
+As in LIME, ``discretizer`` has no effect when discretization is disabled.
+For LIME's entropy discretizer, training labels are required by LIME but are not
+currently supplied by this backend.
 
 Model outputs and production export
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

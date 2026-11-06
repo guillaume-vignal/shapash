@@ -133,7 +133,9 @@ class SmartExplainer:
         ``categorical_features`` is a complete list of feature names before
         preprocessing; None infers them from encoders and input metadata.
         An explicit list replaces inference, but encoded categorical blocks
-        are always sampled together to preserve valid model inputs.
+        are always sampled together to preserve valid model inputs. LIME also
+        accepts ``random_state``, ``num_samples``, ``kernel_width``,
+        ``discretize_continuous`` and ``discretizer`` as backend options.
 
     Attributes
     ----------

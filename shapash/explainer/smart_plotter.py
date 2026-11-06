@@ -383,9 +383,9 @@ class SmartPlotter:
 
             score(class) = base_score(class) + sum(feature contributions)
 
-        These scores are then converted into probabilities using a softmax
-        transformation so that class probabilities remain coupled across
-        all classes.
+        For probability-space contributions, the values are already on the
+        probability scale and are not passed through softmax. Otherwise the
+        existing score-space behavior applies softmax.
 
         Parameters
         ----------
@@ -418,13 +418,37 @@ class SmartPlotter:
             ]
         )
 
-        probs = self._softmax_from_scores(scores)
-        base_probs = self._softmax_from_scores(base_scores)
+        if self._waterfall_output_space() == "probability":
+            probs = scores
+            base_probs = base_scores
+        else:
+            probs = self._softmax_from_scores(scores)
+            base_probs = self._softmax_from_scores(base_scores)
 
         predicted_idx = int(np.argmax(probs))
         predicted_class = classes[predicted_idx]
 
         return predicted_class, probs, base_probs, scores, base_scores
+
+    def _waterfall_output_space(self) -> str | None:
+        explain_data = self._explainer.explain_data
+        if isinstance(explain_data, dict):
+            output_space = explain_data.get("output_space")
+            if output_space is not None:
+                return output_space
+            backend = getattr(self._explainer, "backend", None)
+            if getattr(backend, "name", None) == "lime" and explain_data.get("contributions_space") == "original":
+                return "probability"
+        return None
+
+    def _waterfall_is_local_surrogate(self) -> bool:
+        explain_data = self._explainer.explain_data
+        if not isinstance(explain_data, dict):
+            return False
+        if explain_data.get("explanation_type") == "local_surrogate":
+            return True
+        backend = getattr(self._explainer, "backend", None)
+        return getattr(backend, "name", None) == "lime" and explain_data.get("contributions_space") == "original"
 
     def _softmax_from_scores(self, scores: np.ndarray | list[float]) -> np.ndarray:
         """
@@ -460,10 +484,8 @@ class SmartPlotter:
         """
         Build waterfall tooltip text for classification local explanations.
 
-        Each tooltip line displays the cumulative additive score for the
-        explained class together with its coupled probability. Probabilities
-        are recomputed from all class scores using a softmax transformation
-        after each contribution step.
+        Probability-space contributions are displayed directly as cumulative
+        values. Score-space contributions use the existing softmax behavior.
 
         Parameters
         ----------
@@ -489,6 +511,18 @@ class SmartPlotter:
         display: positive contributions (largest absolute values first),
         followed by zero contributions, then negative contributions.
         """
+        if self._waterfall_output_space() == "probability":
+            running_value = self._get_waterfall_base_value(line, label_num=label_num)
+            prefix = (
+                "LIME sum on probability scale" if self._waterfall_is_local_surrogate() else "Probability-scale sum"
+            )
+            tooltips = [f"{prefix}: <b>{running_value:.4f}</b>"]
+            for value in contrib:
+                running_value += value
+                tooltips.append(f"{prefix}: <b>{running_value:.4f}</b>")
+            tooltips.append(f"{prefix}: <b>{running_value:.4f}</b>")
+            return tooltips
+
         _, coupled_probs, _, coupled_scores, coupled_base_scores = self._get_waterfall_classification_coupled_outputs(
             line, data
         )
@@ -823,6 +857,7 @@ class SmartPlotter:
                     waterfall_tooltips = self._get_waterfall_classification_tooltips(line, data, contrib, label_num)
 
         base_value = self._get_waterfall_base_value(line, label_num=label_num) if plot_type == "waterfall" else None
+        is_local_surrogate = plot_type == "waterfall" and self._waterfall_is_local_surrogate()
 
         fig = plot_bar_chart(
             index_value=line,
@@ -848,6 +883,12 @@ class SmartPlotter:
             waterfall_tooltips=waterfall_tooltips
             if self._explainer._case == "classification" and plot_type == "waterfall"
             else None,
+            waterfall_total_label="Sum of displayed weights" if is_local_surrogate else "Prediction",
+            waterfall_total_description="Baseline + displayed weights" if is_local_surrogate else "Model output",
+            waterfall_cumulative_description="Baseline + displayed weights"
+            if is_local_surrogate
+            else "Cumulative output",
+            waterfall_axis_title="Local surrogate values" if is_local_surrogate else "Model output",
         )
 
         return fig

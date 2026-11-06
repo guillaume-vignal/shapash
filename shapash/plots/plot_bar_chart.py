@@ -29,6 +29,10 @@ def plot_bar_chart(
     waterfall_baseline_position: Literal["top", "bottom"] = "bottom",
     waterfall_xaxis_start: float | int | Literal["auto"] | None = None,
     waterfall_tooltips: list[str] | None = None,
+    waterfall_total_label: str = "Prediction",
+    waterfall_total_description: str = "Model output",
+    waterfall_cumulative_description: str = "Cumulative output",
+    waterfall_axis_title: str = "Model output",
 ) -> go.Figure:
     """
     Plotly bar plot of local explainers.
@@ -91,6 +95,14 @@ def plot_bar_chart(
         - numeric value: force a manual x-axis start
     waterfall_tooltips: list (default: None)
         Optional per-bar tooltip suffixes for waterfall mode.
+    waterfall_total_label: str (default: "Prediction")
+        Label of the final waterfall bar.
+    waterfall_total_description: str (default: "Model output")
+        Description of the final waterfall value in its tooltip.
+    waterfall_cumulative_description: str (default: "Cumulative output")
+        Description of the cumulative value in contribution tooltips.
+    waterfall_axis_title: str (default: "Model output")
+        Title of the waterfall's output axis.
 
     Returns
     -------
@@ -133,7 +145,7 @@ def plot_bar_chart(
                 title += "<br><sup>" + subtitle + "</sup>"
                 topmargin += 15
         dict_t = style_dict["dict_title"] | {"text": title, "y": adjust_title_height(height)}
-        xaxis_title = "Model output" if plot_type == "waterfall" else "Contribution"
+        xaxis_title = waterfall_axis_title if plot_type == "waterfall" else "Contribution"
         dict_xaxis = style_dict["dict_xaxis"] | {"text": xaxis_title}
         dict_yaxis = style_dict["dict_yaxis"] | {"text": None}
         dict_local_plot_colors = style_dict["dict_local_plot_colors"] | {"text": None}
@@ -246,7 +258,7 @@ def plot_bar_chart(
                     formatted = formatted.rstrip("0").rstrip(".")
                 return formatted
 
-            y_values = ["<i>Baseline</i>"] + [x[4] for x in bars] + ["<i>Prediction</i>"]
+            y_values = ["<i>Baseline</i>"] + [x[4] for x in bars] + [f"<i>{waterfall_total_label}</i>"]
             bar_lengths = [base_value]
             bar_bases = [0.0]
             baseline_bar_color = style_dict.get("prediction_plot", {}).get(1, dict_local_plot_colors[1]["color"])
@@ -263,14 +275,16 @@ def plot_bar_chart(
                 bar_colors.append(elem[6])
 
                 cumulative_value += elem[1]
-                custom_data.append(f"{elem[5]}<br />Cumulative output: <b>{_format_value(cumulative_value)}</b>")
+                custom_data.append(
+                    f"{elem[5]}<br />{waterfall_cumulative_description}: <b>{_format_value(cumulative_value)}</b>"
+                )
 
                 value_text.append(_format_value(elem[1]))
 
             bar_lengths.append(final_prediction)
             bar_bases.append(0.0)
             bar_colors.append(prediction_bar_color)
-            custom_data.append(f"<b>Model output</b>: {_format_value(final_prediction)}")
+            custom_data.append(f"<b>{waterfall_total_description}</b>: {_format_value(final_prediction)}")
             value_text.append(_format_value(final_prediction))
 
             if waterfall_tooltips is not None:

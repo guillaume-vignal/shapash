@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from numbers import Real
 from typing import Any
 
 import numpy as np
@@ -8,7 +9,9 @@ try:
     from lime import lime_tabular
 
     is_lime_available = True
-except ImportError:
+except ModuleNotFoundError as error:
+    if error.name != "lime":
+        raise
     is_lime_available = False
 
 import pandas as pd
@@ -67,7 +70,13 @@ class LimeBackend(BaseBackend):
         preprocessing: Any | None = None,
         data: pd.DataFrame | None = None,
         categorical_features: list[str] | None = None,
-        **kwargs: Any,
+        *,
+        random_state: int | np.random.RandomState | None = None,
+        num_samples: int | None = None,
+        kernel_width: float | None = None,
+        discretize_continuous: bool | None = None,
+        discretizer: Any | None = None,
+        masker: Any | None = None,
     ) -> None:
         """Initialize the LIME backend.
 
@@ -86,8 +95,20 @@ class LimeBackend(BaseBackend):
             and CategoricalNB. An explicit list, including [], replaces inference.
             Encoded categorical blocks such as one-hot groups always remain
             grouped, regardless of this list.
-        **kwargs : Any
-            Additional keyword arguments accepted by the constructor.
+        random_state : int, numpy.random.RandomState or None, optional
+            Random state passed to LIME. An integer makes a newly constructed
+            backend reproducible.
+        num_samples : int or None, optional
+            Number of perturbations per explanation. None uses LIME's default.
+        kernel_width : float or None, optional
+            Width of LIME's locality kernel. None uses LIME's default.
+        discretize_continuous : bool or None, optional
+            Whether LIME discretizes continuous features. None uses LIME's default.
+        discretizer : str, LIME discretizer or None, optional
+            Discretizer passed to LIME. None uses LIME's default.
+        masker : Any, optional
+            Accepted for compatibility with SmartExplainer. LIME uses ``data``
+            as its background instead of a SHAP masker.
 
         Raises
         ------
@@ -112,6 +133,24 @@ class LimeBackend(BaseBackend):
         ):
             raise ValueError("categorical_features must be None or a list of unique feature names.")
         self.categorical_features = None if categorical_features is None else categorical_features.copy()
+        if num_samples is not None and (
+            isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 1
+        ):
+            raise ValueError("num_samples must be a positive integer.")
+        if kernel_width is not None and (
+            isinstance(kernel_width, bool)
+            or not isinstance(kernel_width, Real)
+            or not np.isfinite(kernel_width)
+            or kernel_width <= 0
+        ):
+            raise ValueError("kernel_width must be a positive finite number.")
+        if discretize_continuous is not None and not isinstance(discretize_continuous, bool):
+            raise ValueError("discretize_continuous must be a boolean.")
+        self.random_state = random_state
+        self.num_samples = num_samples
+        self.kernel_width = kernel_width
+        self.discretize_continuous = discretize_continuous
+        self.discretizer = discretizer
         self._lime_input: LimeInput | None = None
 
     def __getstate__(self) -> dict[str, Any]:
@@ -150,7 +189,11 @@ class LimeBackend(BaseBackend):
               - np.ndarray of shape (n_samples,) for regression.
             - 'contributions_space': 'original', because encoded categorical
               blocks have already been represented by their original feature.
+            - 'explanation_type': 'local_surrogate'.
+            - 'output_space': 'probability' for classification.
         """
+        if not is_lime_available:
+            raise ImportError("LIME is required to compute explanations. Install it with pip install 'shapash[lime]'.")
         feature_names = list(x.columns)
         data = self.data if self.data is not None else x
 
@@ -159,11 +202,17 @@ class LimeBackend(BaseBackend):
             self._lime_input = LimeInput(
                 data, self.preprocessing, self.categorical_features, isinstance(self.model, CategoricalNB)
             )
+            options = {
+                name: value
+                for name in ("random_state", "kernel_width", "discretize_continuous", "discretizer")
+                if (value := getattr(self, name, None)) is not None
+            }
             self.explainer = lime_tabular.LimeTabularExplainer(
                 self._lime_input.background.to_numpy(),
                 feature_names=list(self._lime_input.background.columns),
                 mode=self._case,
                 categorical_features=self._lime_input.categorical_indices,
+                **options,
             )
 
         lime_input = self._lime_input
@@ -189,7 +238,15 @@ class LimeBackend(BaseBackend):
         else:
             contributions, base_values = self._explain_binary_or_regression(lime_x, lime_feature_names, predict_fn)
 
-        return dict(contributions=contributions, base_values=base_values, contributions_space="original")
+        explain_data = dict(
+            contributions=contributions,
+            base_values=base_values,
+            contributions_space="original",
+            explanation_type="local_surrogate",
+        )
+        if self._case == "classification":
+            explain_data["output_space"] = "probability"
+        return explain_data
 
     def get_local_contributions(
         self, x: pd.DataFrame, explain_data: Any, subset: list[int] | None = None
@@ -284,12 +341,15 @@ class LimeBackend(BaseBackend):
         """
         # One explain_instance call per sample — O(n_samples)
         explanations = []
+        num_samples = getattr(self, "num_samples", None)
+        options = {} if num_samples is None else {"num_samples": num_samples}
         for idx in x.index:
             exp = self.explainer.explain_instance(
                 x.loc[idx].to_numpy(),
                 predict_fn,
                 top_labels=num_classes,
                 num_features=x.shape[1],
+                **options,
             )
             explanations.append(exp)
 
@@ -333,18 +393,21 @@ class LimeBackend(BaseBackend):
         lime_contrib = []
         base_values_cls: list[list[float]] = []
         base_values_reg: list[float] = []
+        num_samples = getattr(self, "num_samples", None)
+        options = {} if num_samples is None else {"num_samples": num_samples}
         for i in x.index:
             exp = self.explainer.explain_instance(
                 x.loc[i].to_numpy(),
                 predict_fn,
                 num_features=x.shape[1],
+                **options,
             )
             lime_contrib.append(self._contributions_for_label(exp, feature_names, 1))
             if self._case == "classification":
                 # Binary classification contributions are expanded later as [-contrib, +contrib].
-                # Keep base values coherent with this convention.
+                # The complementary probability has intercept 1 - intercept.
                 pos_intercept = self._extract_intercept(exp, class_idx=1)
-                base_values_cls.append([-pos_intercept, pos_intercept])
+                base_values_cls.append([1.0 - pos_intercept, pos_intercept])
             else:
                 base_values_reg.append(self._extract_intercept(exp, class_idx=0))
 
